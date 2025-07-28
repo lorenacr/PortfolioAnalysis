@@ -2,9 +2,12 @@
 
 This framework is to analyze and rank multiple trading portfolios in a way to help choose the best portfolio.
 
+***
 
-#### :one: Steps to analyze any number of portfolios:
-- Put PDF files into a folder (ex: './portfolios/')
+## How to use
+
+#### :one: Put PDF files in a folder
+- Choose a folder to put PDF files in (ex: './portfolios/')
 - Be sure that PDFs are in the SQX format 
 
 
@@ -43,8 +46,9 @@ This framework is to analyze and rank multiple trading portfolios in a way to he
 - Top performers detailed report
 - Advanced metrics for each portfolio
 
+***
 
-#### :zap: Expected performance:
+## :zap: Expected performance:
 - Processing: 5 to 10 minutes for 600 PDFs
 - Quantitative analysis: less than 1 minute
 - Report generation: instantly
