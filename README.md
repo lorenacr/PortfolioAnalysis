@@ -2,7 +2,7 @@
 
 This framework is to analyze and rank multiple trading portfolios in a way to help choose the best portfolio.
 
-***
+---
 
 ## How to use
 
@@ -46,9 +46,10 @@ This framework is to analyze and rank multiple trading portfolios in a way to he
 - Top performers detailed report
 - Advanced metrics for each portfolio
 
-***
+---
 
 ## :zap: Expected performance:
+
 - Processing: 5 to 10 minutes for 600 PDFs
 - Quantitative analysis: less than 1 minute
 - Report generation: instantly
