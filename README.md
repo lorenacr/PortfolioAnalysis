@@ -2,13 +2,11 @@
 
 This framework is to analyze and rank multiple trading portfolios in a way to help choose the best portfolio.
 
-<br> 
 
 #### :one: Steps to analyze any number of portfolios:
 - Put PDF files into a folder (ex: './portfolios/')
 - Be sure that PDFs are in the SQX format 
 
-<br>
 
 #### :two: Execution:
    ```python
@@ -22,7 +20,6 @@ This framework is to analyze and rank multiple trading portfolios in a way to he
    generate_portfolio_report(df_results, top_n=20)
    ```
 
-<br>
 
 #### :three: Customization (optional):
    ```python
@@ -39,7 +36,6 @@ This framework is to analyze and rank multiple trading portfolios in a way to he
    df_custom = analyze_portfolio_quantitatively(portfolio_data, custom_weights)
    ```
 
-<br>
 
 #### :four: Results:
 - CSV file containing all results
@@ -47,7 +43,6 @@ This framework is to analyze and rank multiple trading portfolios in a way to he
 - Top performers detailed report
 - Advanced metrics for each portfolio
 
-<br>
 
 #### :zap: Expected performance:
 - Processing: 5 to 10 minutes for 600 PDFs
