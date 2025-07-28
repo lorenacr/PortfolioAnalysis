@@ -1,5 +1,7 @@
 # PortfolioAnalysis
 
+This framework is to analyze and rank multiple trading portfolios in a way to help choose the best portfolio.
+
 #### :one: Steps to analyze any number of portfolios:
 - Put PDF files into a folder (ex: './portfolios/')
 - Be sure that PDFs are in the SQX format 
