@@ -12,17 +12,7 @@ This framework is to analyze and rank multiple trading portfolios in a way to he
 
 
 #### :two: Execution:
-   ```python
-   # Import framework framework
-   exec(open('portfolio_quant_framework.py', encoding='utf-8').read())
-   
-   # Analyze all portfolios
-   df_results = batch_analyze_portfolios('./portfolios/', 'portfolios_analysis.csv')
-   
-   # See TOP 20 portfolios
-   generate_portfolio_report(df_results, top_n=20)
-   ```
-
+- Execute .ipynb file
 
 #### :three: Customization (optional):
    ```python
