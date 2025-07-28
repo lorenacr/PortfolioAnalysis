@@ -1,1 +1,44 @@
 # PortfolioAnalysis
+
+#### :one: Steps to analyze any number of portfolios:
+- Put PDF files into a folder (ex: './portfolios/')
+- Be sure that PDFs are in the SQX format 
+
+
+#### :two: Execution:
+   ```python
+   # Import framework framework
+   exec(open('portfolio_quant_framework.py').read())
+   
+   # Analyze all portfolios
+   df_results = batch_analyze_portfolios('./portfolios/', 'portfolios_analysis.csv')
+   
+   # See TOP 20 portfolios
+   generate_portfolio_report(df_results, top_n=20)
+   ```
+
+#### :three: Customization (optional):
+   ```python
+   # Personalized weights
+   custom_weights = {
+       'risk_efficiency': 0.30,      # More weight in the efficiency
+       'consistency': 0.25,          # More weight in the consistency  
+       'stability': 0.20,
+       'institutional_grade': 0.15,
+       'sharpe_ratio': 0.05,
+       'max_dd_protection': 0.05
+   }
+   
+   df_custom = analyze_portfolio_quantitatively(portfolio_data, custom_weights)
+   ```
+
+#### :four: Results:
+- CSV file containing all results
+- Automatic ranking
+- Top performers detailed report
+- Advanced metrics for each portfolio
+
+#### :zap: Expected performance:
+- Processing: 5 to 10 minutes for 600 PDFs
+- Quantitative analysis: less than 1 minute
+- Report generation: instantly
