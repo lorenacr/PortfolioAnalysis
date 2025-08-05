@@ -7,15 +7,15 @@ Implements institutional-grade financial metrics with academic standards.
 Enhanced with advanced stability, tail risk, and regime analysis metrics.
 """
 
-import sys
 from typing import Tuple, Optional, Dict
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
-from custom_config import CONFIDENCE_LEVEL, NORMALIZE_PORTFOLIO_COLOR, NORMALIZATION_METHOD
+from custom_config import CONFIDENCE_LEVEL
 
+# Base capital for converting PnL to Returns
+CAPITAL_BASE = 1000
 
 def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> float:
     """
@@ -29,11 +29,15 @@ def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> 
         Sharpe ratio
     """
     try:
-        if len(returns) == 0 or returns.std() == 0:
+        returns_std = returns.std()
+        if returns_std == 0 or pd.isna(returns_std):
             return 0.0
-        
-        excess_returns = returns.mean() - (risk_free_rate / 252)  # Daily risk-free rate
-        return (excess_returns / returns.std()) * np.sqrt(252)  # Annualized
+
+        daily_risk_free_rate = risk_free_rate / 252
+
+        excess_returns = returns.mean() - daily_risk_free_rate
+        return excess_returns / returns_std
+    
     except Exception:
         return 0.0
 
@@ -49,20 +53,20 @@ def calculate_sortino_ratio(returns: pd.Series, risk_free_rate: float = 0.02) ->
         Sortino ratio
     """
     try:
-        if len(returns) == 0:
-            return 0.0
-        
-        excess_returns = returns.mean() - (risk_free_rate / 252)
-        downside_returns = returns[returns < 0]
-        
+        daily_risk_free_rate = risk_free_rate / 252
+
+        excess_returns = returns - daily_risk_free_rate
+        downside_returns = excess_returns[excess_returns < 0]
+
         if len(downside_returns) == 0:
-            return calculate_sharpe_ratio(returns, risk_free_rate)
-        
-        downside_deviation = downside_returns.std()
-        if downside_deviation == 0:
+            return float('inf') if excess_returns.mean() > 0 else 0.0
+
+        downside_std = downside_returns.std()
+        if downside_std == 0 or pd.isna(downside_std):
             return 0.0
-            
-        return (excess_returns / downside_deviation) * np.sqrt(252)
+
+        return excess_returns.mean() / downside_std
+    
     except Exception:
         return 0.0
 
@@ -77,16 +81,14 @@ def calculate_calmar_ratio(returns: pd.Series) -> float:
         Calmar ratio
     """
     try:
-        if len(returns) == 0:
-            return 0.0
-        
-        annual_return = returns.mean() * 252
+        total_return = returns.sum()
         max_dd = calculate_max_drawdown(returns)
         
         if max_dd == 0:
             return 0.0
         
-        return annual_return / max_dd
+        return total_return / max_dd
+    
     except Exception:
         return 0.0
 
@@ -98,17 +100,15 @@ def calculate_max_drawdown(returns: pd.Series) -> float:
         returns: Series of portfolio returns
         
     Returns:
-        Maximum drawdown as positive value
+        Maximum drawdown as a positive value
     """
     try:
-        if len(returns) == 0:
-            return 0.0
-        
-        cumulative_returns = (1 + returns).cumprod()
-        peak = cumulative_returns.expanding().max()
-        drawdown = (cumulative_returns - peak) / peak
-        
+        equity_curve = returns.cumsum()
+        peak = equity_curve.expanding().max()
+        drawdown = equity_curve - peak
+
         return abs(drawdown.min())
+    
     except Exception:
         return 0.0
 
@@ -127,9 +127,6 @@ def calculate_var_cvar(returns: pd.Series, confidence_level: float = None) -> Tu
         if confidence_level is None:
             confidence_level = CONFIDENCE_LEVEL
         
-        if len(returns) == 0:
-            return 0.0, 0.0
-        
         # Calculate VaR
         var = abs(returns.quantile(confidence_level))
         
@@ -138,6 +135,7 @@ def calculate_var_cvar(returns: pd.Series, confidence_level: float = None) -> Tu
         cvar = abs(tail_returns.mean()) if len(tail_returns) > 0 else var
         
         return var, cvar
+    
     except Exception:
         return 0.0, 0.0
 
@@ -153,9 +151,6 @@ def calculate_omega_ratio(returns: pd.Series, threshold: float = 0.0) -> float:
         Omega ratio
     """
     try:
-        if len(returns) == 0:
-            return 1.0
-        
         gains = returns[returns > threshold].sum()
         losses = abs(returns[returns <= threshold].sum())
         
@@ -163,6 +158,7 @@ def calculate_omega_ratio(returns: pd.Series, threshold: float = 0.0) -> float:
             return float('inf') if gains > 0 else 1.0
         
         return gains / losses
+    
     except Exception:
         return 1.0
 
@@ -190,7 +186,7 @@ def calculate_sharpe_stability(returns: pd.Series, window: int = 63) -> float:
         for i in range(window, len(returns)):
             window_returns = returns.iloc[i-window:i]
             if window_returns.std() > 0:
-                sharpe = (window_returns.mean() / window_returns.std()) * np.sqrt(252)
+                sharpe = window_returns.mean() / window_returns.std()
                 rolling_sharpe.append(sharpe)
         
         if len(rolling_sharpe) == 0:
@@ -203,6 +199,7 @@ def calculate_sharpe_stability(returns: pd.Series, window: int = 63) -> float:
         
         cv = rolling_sharpe.std() / abs(rolling_sharpe.mean()) if rolling_sharpe.mean() != 0 else float('inf')
         return 1.0 / (1.0 + cv)
+    
     except Exception:
         return 0.0
 
@@ -217,11 +214,12 @@ def calculate_return_stability(returns: pd.Series) -> float:
         Stability score (0-1, higher is better)
     """
     try:
-        if len(returns) == 0 or returns.std() == 0:
+        if returns.std() == 0:
             return 0.0
         
         cv = returns.std() / abs(returns.mean()) if returns.mean() != 0 else float('inf')
         return 1.0 / (1.0 + cv)
+    
     except Exception:
         return 0.0
 
@@ -271,6 +269,7 @@ def calculate_recovery_consistency(returns: pd.Series, drawdown_threshold: float
         
         cv = recovery_times.std() / recovery_times.mean()
         return 1.0 / (1.0 + cv)
+    
     except Exception:
         return 0.0
 
@@ -290,10 +289,7 @@ def calculate_tail_ratio(returns: pd.Series, percentile: float = 0.05) -> float:
     Returns:
         Tail ratio (>1 indicates positive skew)
     """
-    try:
-        if len(returns) == 0:
-            return 1.0
-        
+    try:       
         upper_tail = returns.quantile(1 - percentile)
         lower_tail = abs(returns.quantile(percentile))
         
@@ -301,6 +297,7 @@ def calculate_tail_ratio(returns: pd.Series, percentile: float = 0.05) -> float:
             return 1.0
         
         return upper_tail / lower_tail
+    
     except Exception:
         return 1.0
 
@@ -314,10 +311,7 @@ def calculate_max_loss_streak(returns: pd.Series) -> int:
     Returns:
         Maximum number of consecutive losing periods
     """
-    try:
-        if len(returns) == 0:
-            return 0
-        
+    try:       
         current_streak = 0
         max_streak = 0
         
@@ -329,6 +323,7 @@ def calculate_max_loss_streak(returns: pd.Series) -> int:
                 current_streak = 0
         
         return max_streak
+    
     except Exception:
         return 0
 
@@ -342,10 +337,7 @@ def calculate_multi_level_cvar(returns: pd.Series) -> dict:
     Returns:
         Dictionary with CVaR at different confidence levels
     """
-    try:
-        if len(returns) == 0:
-            return {'cvar_90': 0.0, 'cvar_95': 0.0, 'cvar_99': 0.0}
-        
+    try:        
         levels = [0.10, 0.05, 0.01]
         result = {}
         
@@ -355,6 +347,7 @@ def calculate_multi_level_cvar(returns: pd.Series) -> dict:
             result[f'cvar_{int((1-level)*100)}'] = cvar
         
         return result
+    
     except Exception:
         return {'cvar_90': 0.0, 'cvar_95': 0.0, 'cvar_99': 0.0}
 
@@ -362,7 +355,7 @@ def calculate_multi_level_cvar(returns: pd.Series) -> dict:
 # REGIME ANALYSIS METRICS
 # ============================================================================
 
-def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.02) -> float:
+def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.00) -> float:
     """
     Calculate Performance Consistency Across Volatility Regimes
     Measures how consistently the strategy performs in different market conditions
@@ -379,7 +372,7 @@ def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.02
             return 0.0
         
         # Calculate rolling volatility
-        rolling_vol = returns.rolling(21).std() * np.sqrt(252)
+        rolling_vol = returns.rolling(21).std()
         
         # Define regimes based on median volatility
         median_vol = rolling_vol.median()
@@ -403,13 +396,11 @@ def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.02
         avg_sharpe = (high_vol_sharpe + low_vol_sharpe) / 2
         if avg_sharpe == 0:
             return 0.0
-        return abs(avg_sharpe)
-    except Exception:
-        return 0.0
-        
+
         # Consistency is inverse of relative difference
         diff = abs(high_vol_sharpe - low_vol_sharpe) / avg_sharpe
         return 1.0 / (1.0 + diff)
+    
     except Exception:
         return 0.0
 
@@ -419,23 +410,20 @@ def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.02
 
 def calculate_basic_metrics(returns: pd.Series) -> dict:
     """
-    Calculate basic portfolio metrics (original function preserved)
+    Calculate basic portfolio metrics 
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio PnL
         
     Returns:
         Dictionary of basic metrics
     """
-    try:
-        if len(returns) == 0:
-            return {}
-        
+    try:        
         var_95, cvar_95 = calculate_var_cvar(returns, 0.05)
         
         metrics = {
-            'total_return': (1 + returns).prod() - 1,
-            'volatility': returns.std() * np.sqrt(252),
+            'total_return': returns.sum(),
+            'volatility': returns.std(),
             'sharpe_ratio': calculate_sharpe_ratio(returns),
             'sortino_ratio': calculate_sortino_ratio(returns),
             'calmar_ratio': calculate_calmar_ratio(returns),
@@ -446,6 +434,7 @@ def calculate_basic_metrics(returns: pd.Series) -> dict:
         }
         
         return metrics
+    
     except Exception as e:
         print(f"⚠️  Basic metrics calculation failed: {str(e)}")
         return {}
@@ -461,11 +450,7 @@ def calculate_all_enhanced_metrics(returns: pd.Series) -> dict:
     Returns:
         Dictionary of all enhanced metrics
     """
-    try:
-        if len(returns) == 0:
-            print("⚠️  Empty returns series provided")
-            return {}
-        
+    try:        
         # Start with basic metrics
         metrics = calculate_basic_metrics(returns)
         
@@ -497,41 +482,7 @@ def calculate_all_enhanced_metrics(returns: pd.Series) -> dict:
         
     except Exception as e:
         print(f"❌ Enhanced metrics calculation failed: {str(e)}")
-        return calculate_basic_metrics(returns)  # Fallback to basic metrics
-
-def get_metric_descriptions() -> dict:
-    """
-    Get descriptions of all available metrics for reporting
-    
-    Returns:
-        Dictionary mapping metric names to descriptions
-    """
-    return {
-        # Basic Performance Metrics
-        'total_return': 'Total cumulative return over the period',
-        'volatility': 'Annualized volatility (standard deviation)',
-        'sharpe_ratio': 'Risk-adjusted return (Sharpe Ratio)',
-        'sortino_ratio': 'Downside risk-adjusted return (Sortino Ratio)',
-        'calmar_ratio': 'Return to maximum drawdown ratio',
-        'max_drawdown': 'Maximum peak-to-trough decline',
-        'var_95': 'Value at Risk at 95% confidence level',
-        'cvar_95': 'Conditional Value at Risk at 95% confidence level',
-        'omega_ratio': 'Probability-weighted ratio of gains to losses',
-        
-        # Enhanced Stability Metrics
-        'sharpe_stability': 'Consistency of risk-adjusted returns over time',
-        'return_stability': 'Stability of return patterns (inverse CV)',
-        'recovery_consistency': 'Consistency of drawdown recovery patterns',
-        
-        # Enhanced Tail Risk Metrics
-        'tail_ratio': 'Ratio of upside to downside tail returns',
-        'max_loss_streak': 'Maximum consecutive losing periods',
-        'cvar_90': 'Conditional Value at Risk at 90% confidence level',
-        'cvar_99': 'Conditional Value at Risk at 99% confidence level',
-        
-        # Regime Analysis
-        'regime_consistency': 'Performance consistency across volatility regimes'
-    }
+        return {}
 
 def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
                                 portfolio_name: str) -> Optional[Dict]:
@@ -553,9 +504,12 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
             print(f"   ❌ {portfolio_name}: No valid P&L data")
             return None
 
-        # Calculate returns (assuming P&L is already in return format)
-        returns = pnl_series / 100.0 if pnl_series.abs().mean() > 1 else pnl_series
-
+        # Calculate returns
+        returns = convert_pnl_to_returns(pnl_series)
+        if len(returns) == 0:
+            print(f"   ❌ {portfolio_name}: Failed to convert PnL to returns")
+            return {}
+        
         # Calculate all enhanced metrics
         metrics = calculate_all_enhanced_metrics(returns)
 
@@ -576,72 +530,28 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
         print(f"   ❌ {portfolio_name}: Analysis failed - {str(e)}")
         return None
 
-
-
-def normalize_portfolio_metrics(df: pd.DataFrame) -> pd.DataFrame:
+def convert_pnl_to_returns(pnl_series, capital_base=CAPITAL_BASE):
     """
-    Normalize metrics using robust statistical methods
+    Convert PnL to returns using fixed capital base
     
     Args:
-        df: DataFrame with calculated metrics
-        
+        pnl_series: series of PnL values
+        capital_base: base capital for conversion (default: 1000)
+    
     Returns:
-        DataFrame with normalized metrics
+        pd.Series: normalized returns
     """
-    try:            
-        normalized_df = df.copy()
-        
-        # Define metrics to normalize (exclude metadata)
-        exclude_cols = ['Portfolio', 'Trade_Count', 'Win_Rate', 'Avg_Win', 'Avg_Loss']
-        metric_cols = [col for col in df.columns if col not in exclude_cols]
-                  
-        for col in tqdm(
-                metric_cols,
-                desc="📊 Normalizing",
-                unit="metric",
-                file=sys.stdout,
-                colour=NORMALIZE_PORTFOLIO_COLOR,
-                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
-            ):
-            try:
-                values = df[col].replace([np.inf, -np.inf], np.nan).dropna()
-                
-                if len(values) == 0 or values.std() == 0:
-                    normalized_df[col] = 0.5  # Neutral score
-                    continue
-                
-                if NORMALIZATION_METHOD == 'robust_percentile':
-                    # Use percentile-based normalization (more robust to outliers)
-                    p25, p75 = values.quantile([0.25, 0.75])
-                    iqr = p75 - p25
-                    
-                    if iqr > 0:
-                        normalized_df[col] = (df[col] - values.median()) / iqr
-                        # Scale to 0-1 range
-                        normalized_df[col] = (normalized_df[col] + 2) / 4
-                        normalized_df[col] = normalized_df[col].clip(0, 1)
-                    else:
-                        normalized_df[col] = 0.5
-                
-                elif NORMALIZATION_METHOD == 'min_max':
-                    # Traditional min-max normalization
-                    min_val, max_val = values.min(), values.max()
-                    if max_val > min_val:
-                        normalized_df[col] = (df[col] - min_val) / (max_val - min_val)
-                    else:
-                        normalized_df[col] = 0.5
-                
-                else:  # z-score normalization
-                    normalized_df[col] = (df[col] - values.mean()) / values.std()
-                    # Convert to 0-1 scale using sigmoid
-                    normalized_df[col] = 1 / (1 + np.exp(-normalized_df[col]))
-            
-            except Exception as e:
-                print(f"   ⚠️  Normalization failed for {col}: {str(e)}")
-                normalized_df[col] = 0.5
-        
-        return normalized_df
-        
+    try:
+        if len(pnl_series) == 0:
+            return pd.Series([], dtype=float)
+
+        # Convert PnL to returns using base capital
+        returns = pnl_series / capital_base
+
+        # Remove infinite values and NaN
+        returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
+        return returns
+
     except Exception as e:
-        print(f"   ❌ Normalization failed: {str(e)}")
-        return df
+        print(f"⚠️ Conversion error: {e}")
+        return pd.Series([], dtype=float)

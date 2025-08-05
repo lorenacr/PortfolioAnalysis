@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from core_metrics import calculate_portfolio_metrics, normalize_portfolio_metrics
+from core_metrics import calculate_portfolio_metrics
 from custom_config import INPUT_FOLDER, ANALYZE_PORTFOLIO_COLOR, SCORING_METHOD, COST_CRITERIA, SCORING_WEIGHTS, \
     BENEFIT_CRITERIA
 from data_utils import load_portfolios_from_folder
@@ -258,14 +258,10 @@ class PortfolioAnalyzer:
             # Create results dataframe
             self.results_df = pd.DataFrame(results)
 
-            # Step 3: Normalize metrics
-            normalized_df = normalize_portfolio_metrics(self.results_df)
+            # Step 3: Calculate composite scores
+            self.results_df = self.calculate_composite_scores(self.results_df)
 
-            # Step 4: Calculate composite scores
-            final_df = self.calculate_composite_scores(normalized_df)
-            self.results_df = final_df
-
-            print(f"\n✅ Analysis completed for {len(self.results_df)} portfolios")
+            print(f"✅ Analysis completed for {len(self.results_df)} portfolios")
 
             # Step 5: Generate reports
             self.generate_reports()
@@ -285,7 +281,7 @@ class PortfolioAnalyzer:
                 print("⚠️  No results available for reporting")
                 return
 
-            print("📊 Generating comprehensive reports...")
+            print("\n📊 Generating comprehensive reports...")
 
             # Generate executive summary
             generate_executive_summary(self.results_df)
