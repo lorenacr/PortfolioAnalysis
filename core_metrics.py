@@ -15,7 +15,8 @@ import pandas as pd
 from custom_config import CONFIDENCE_LEVEL
 
 # Base capital for converting PnL to Returns
-CAPITAL_BASE = 1000
+INITIAL_CAPITAL = 1000
+PNL_SERIES = pd.Series()
 
 def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> float:
     """
@@ -35,8 +36,17 @@ def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> 
 
         daily_risk_free_rate = risk_free_rate / 252
 
-        excess_returns = returns.mean() - daily_risk_free_rate
-        return excess_returns / returns_std
+        # Calculate daily excess returns
+        excess_returns = returns - daily_risk_free_rate
+
+        # Calculate annualized metrics
+        annualized_excess_return = excess_returns.mean() * 252
+        annualized_volatility = returns.std() * np.sqrt(252)
+
+        if annualized_volatility == 0 or pd.isna(annualized_volatility):
+            return 0.0
+
+        return annualized_excess_return / annualized_volatility
     
     except Exception:
         return 0.0
@@ -81,15 +91,31 @@ def calculate_calmar_ratio(returns: pd.Series) -> float:
         Calmar ratio
     """
     try:
-        total_return = returns.sum()
+        total_return = (1 + returns).prod() - 1
         max_dd = calculate_max_drawdown(returns)
-        
+
         if max_dd == 0:
             return 0.0
-        
+
         return total_return / max_dd
     
     except Exception:
+        return 0.0
+
+def calculate_total_return() -> float:
+    """
+    Calculate total return using equity curve approach
+    
+    Returns:
+        float: total return as decimal (e.g., 0.25 = 25%)
+    """
+    try:
+        final_capital = INITIAL_CAPITAL + PNL_SERIES.sum()
+        total_return = (final_capital - INITIAL_CAPITAL) / INITIAL_CAPITAL
+        return total_return
+
+    except Exception as e:
+        print(f"⚠️ Calculation error: {e}")
         return 0.0
 
 def calculate_max_drawdown(returns: pd.Series) -> float:
@@ -103,10 +129,16 @@ def calculate_max_drawdown(returns: pd.Series) -> float:
         Maximum drawdown as a positive value
     """
     try:
-        equity_curve = returns.cumsum()
-        peak = equity_curve.expanding().max()
-        drawdown = equity_curve - peak
+        # Calculate cumulative returns (equity curve)
+        cumulative_returns = (1 + returns).cumprod()
 
+        # Calculate running maximum (peak)
+        peak = cumulative_returns.expanding().max()
+
+        # Calculate drawdown from peak
+        drawdown = (cumulative_returns - peak) / peak
+
+        # Return maximum drawdown as positive value
         return abs(drawdown.min())
     
     except Exception:
@@ -126,14 +158,14 @@ def calculate_var_cvar(returns: pd.Series, confidence_level: float = None) -> Tu
     try:
         if confidence_level is None:
             confidence_level = CONFIDENCE_LEVEL
-        
+
         # Calculate VaR
         var = abs(returns.quantile(confidence_level))
-        
+
         # Calculate CVaR (Expected Shortfall)
         tail_returns = returns[returns <= returns.quantile(confidence_level)]
         cvar = abs(tail_returns.mean()) if len(tail_returns) > 0 else var
-        
+
         return var, cvar
     
     except Exception:
@@ -153,10 +185,10 @@ def calculate_omega_ratio(returns: pd.Series, threshold: float = 0.0) -> float:
     try:
         gains = returns[returns > threshold].sum()
         losses = abs(returns[returns <= threshold].sum())
-        
+
         if losses == 0:
             return float('inf') if gains > 0 else 1.0
-        
+
         return gains / losses
     
     except Exception:
@@ -181,22 +213,22 @@ def calculate_sharpe_stability(returns: pd.Series, window: int = 63) -> float:
     try:
         if len(returns) < window * 2:
             return 0.0
-        
+
         rolling_sharpe = []
         for i in range(window, len(returns)):
             window_returns = returns.iloc[i-window:i]
             if window_returns.std() > 0:
                 sharpe = window_returns.mean() / window_returns.std()
                 rolling_sharpe.append(sharpe)
-        
+
         if len(rolling_sharpe) == 0:
             return 0.0
-        
+
         # Stability is inverse of coefficient of variation
         rolling_sharpe = pd.Series(rolling_sharpe)
         if rolling_sharpe.std() == 0:
             return 1.0
-        
+
         cv = rolling_sharpe.std() / abs(rolling_sharpe.mean()) if rolling_sharpe.mean() != 0 else float('inf')
         return 1.0 / (1.0 + cv)
     
@@ -216,10 +248,10 @@ def calculate_return_stability(returns: pd.Series) -> float:
     try:
         if returns.std() == 0:
             return 0.0
-        
+
         cv = returns.std() / abs(returns.mean()) if returns.mean() != 0 else float('inf')
         return 1.0 / (1.0 + cv)
-    
+
     except Exception:
         return 0.0
 
@@ -238,15 +270,15 @@ def calculate_recovery_consistency(returns: pd.Series, drawdown_threshold: float
     try:
         if len(returns) < 50:
             return 0.0
-        
+
         cumulative = (1 + returns).cumprod()
         peak = cumulative.expanding().max()
         drawdown = (cumulative - peak) / peak
-        
+
         # Find drawdown periods
         in_drawdown = drawdown < -drawdown_threshold
         recovery_times = []
-        
+
         i = 0
         while i < len(in_drawdown):
             if in_drawdown.iloc[i]:
@@ -258,15 +290,15 @@ def calculate_recovery_consistency(returns: pd.Series, drawdown_threshold: float
                 if i < len(in_drawdown):
                     recovery_times.append(i - start)
             i += 1
-        
+
         if len(recovery_times) == 0:
             return 1.0
-        
+
         # Consistency is inverse of coefficient of variation of recovery times
         recovery_times = pd.Series(recovery_times)
         if recovery_times.std() == 0:
             return 1.0
-        
+
         cv = recovery_times.std() / recovery_times.mean()
         return 1.0 / (1.0 + cv)
     
@@ -289,13 +321,13 @@ def calculate_tail_ratio(returns: pd.Series, percentile: float = 0.05) -> float:
     Returns:
         Tail ratio (>1 indicates positive skew)
     """
-    try:       
+    try:
         upper_tail = returns.quantile(1 - percentile)
         lower_tail = abs(returns.quantile(percentile))
-        
+
         if lower_tail == 0:
             return 1.0
-        
+
         return upper_tail / lower_tail
     
     except Exception:
@@ -311,17 +343,17 @@ def calculate_max_loss_streak(returns: pd.Series) -> int:
     Returns:
         Maximum number of consecutive losing periods
     """
-    try:       
+    try:
         current_streak = 0
         max_streak = 0
-        
+
         for ret in returns:
             if ret < 0:
                 current_streak += 1
                 max_streak = max(max_streak, current_streak)
             else:
                 current_streak = 0
-        
+
         return max_streak
     
     except Exception:
@@ -337,15 +369,15 @@ def calculate_multi_level_cvar(returns: pd.Series) -> dict:
     Returns:
         Dictionary with CVaR at different confidence levels
     """
-    try:        
+    try:
         levels = [0.10, 0.05, 0.01]
         result = {}
-        
+
         for level in levels:
             tail_returns = returns[returns <= returns.quantile(level)]
             cvar = abs(tail_returns.mean()) if len(tail_returns) > 0 else 0.0
             result[f'cvar_{int((1-level)*100)}'] = cvar
-        
+
         return result
     
     except Exception:
@@ -370,29 +402,29 @@ def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.00
     try:
         if len(returns) < 126:  # Need at least 6 months
             return 0.0
-        
+
         # Calculate rolling volatility
         rolling_vol = returns.rolling(21).std()
-        
+
         # Define regimes based on median volatility
         median_vol = rolling_vol.median()
         high_vol_mask = rolling_vol > median_vol + vol_threshold
         low_vol_mask = rolling_vol < median_vol - vol_threshold
-        
+
         # Calculate Sharpe in each regime
         high_vol_returns = returns[high_vol_mask]
         low_vol_returns = returns[low_vol_mask]
-        
+
         if len(high_vol_returns) < 21 or len(low_vol_returns) < 21:
             return 0.0
-        
+
         high_vol_sharpe = calculate_sharpe_ratio(high_vol_returns)
         low_vol_sharpe = calculate_sharpe_ratio(low_vol_returns)
-        
+
         # Consistency is based on similarity of Sharpe ratios
         if high_vol_sharpe == 0 and low_vol_sharpe == 0:
             return 0.0
-        
+
         avg_sharpe = (high_vol_sharpe + low_vol_sharpe) / 2
         if avg_sharpe == 0:
             return 0.0
@@ -422,7 +454,7 @@ def calculate_basic_metrics(returns: pd.Series) -> dict:
         var_95, cvar_95 = calculate_var_cvar(returns, 0.05)
         
         metrics = {
-            'total_return': returns.sum(),
+            'total_return': calculate_total_return(),
             'volatility': returns.std(),
             'sharpe_ratio': calculate_sharpe_ratio(returns),
             'sortino_ratio': calculate_sortino_ratio(returns),
@@ -498,14 +530,15 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
     """
     try:
         # Convert P&L to returns
-        pnl_series = pd.to_numeric(portfolio_data['Profit/Loss'], errors='coerce').dropna()
+        global PNL_SERIES
+        PNL_SERIES = pd.to_numeric(portfolio_data['Profit/Loss'], errors='coerce').dropna()
 
-        if len(pnl_series) == 0:
+        if len(PNL_SERIES) == 0:
             print(f"   ❌ {portfolio_name}: No valid P&L data")
             return None
 
         # Calculate returns
-        returns = convert_pnl_to_returns(pnl_series)
+        returns = convert_pnl_to_returns(PNL_SERIES)
         if len(returns) == 0:
             print(f"   ❌ {portfolio_name}: Failed to convert PnL to returns")
             return {}
@@ -519,10 +552,10 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
 
         # Add portfolio metadata
         metrics['Portfolio'] = portfolio_name
-        metrics['Trade_Count'] = len(pnl_series)
-        metrics['Win_Rate'] = (pnl_series > 0).mean()
-        metrics['Avg_Win'] = pnl_series[pnl_series > 0].mean() if (pnl_series > 0).any() else 0
-        metrics['Avg_Loss'] = pnl_series[pnl_series < 0].mean() if (pnl_series < 0).any() else 0
+        metrics['Trade_Count'] = len(PNL_SERIES)
+        metrics['Win_Rate'] = (PNL_SERIES > 0).mean()
+        metrics['Avg_Win'] = PNL_SERIES[PNL_SERIES > 0].mean() if (PNL_SERIES > 0).any() else 0
+        metrics['Avg_Loss'] = PNL_SERIES[PNL_SERIES < 0].mean() if (PNL_SERIES < 0).any() else 0
 
         return metrics
 
@@ -530,7 +563,7 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
         print(f"   ❌ {portfolio_name}: Analysis failed - {str(e)}")
         return None
 
-def convert_pnl_to_returns(pnl_series, capital_base=CAPITAL_BASE):
+def convert_pnl_to_returns(pnl_series, capital_base=INITIAL_CAPITAL):
     """
     Convert PnL to returns using fixed capital base
     
