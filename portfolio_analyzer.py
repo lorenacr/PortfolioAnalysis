@@ -19,6 +19,7 @@ from custom_config import INPUT_FOLDER, ANALYZE_PORTFOLIO_COLOR, SCORING_METHOD,
     BENEFIT_CRITERIA
 from data_utils import load_portfolios_from_folder
 from reporting import export_results_to_csv, generate_executive_summary, generate_portfolio_recommendations
+from visualization import create_performance_dashboard
 
 warnings.filterwarnings('ignore')
 
@@ -275,7 +276,7 @@ class PortfolioAnalyzer:
             print(f"❌ Complete analysis failed: {str(e)}")
             return False
 
-    def generate_reports(self) -> None:
+    def generate_reports(self):
         """
         Generate comprehensive analysis reports with preserved logging style
         """
@@ -295,6 +296,8 @@ class PortfolioAnalyzer:
             # Export results to CSV
             export_results_to_csv(self.results_df)
 
+            # Generate dashboard
+            create_performance_dashboard(self.results_df)
             print("✅ All reports generated successfully")
 
         except Exception as e:
