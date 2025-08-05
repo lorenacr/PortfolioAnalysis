@@ -7,12 +7,15 @@ Implements institutional-grade financial metrics with academic standards.
 Enhanced with advanced stability, tail risk, and regime analysis metrics.
 """
 
+import sys
 from typing import Tuple, Optional, Dict
+
 import numpy as np
 import pandas as pd
-from scipy import stats
+from tqdm import tqdm
 
-from custom_config import CONFIDENCE_LEVEL
+from custom_config import CONFIDENCE_LEVEL, NORMALIZE_PORTFOLIO_COLOR, NORMALIZATION_METHOD
+
 
 def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> float:
     """
@@ -573,3 +576,72 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
         print(f"   ❌ {portfolio_name}: Analysis failed - {str(e)}")
         return None
 
+
+
+def normalize_portfolio_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize metrics using robust statistical methods
+    
+    Args:
+        df: DataFrame with calculated metrics
+        
+    Returns:
+        DataFrame with normalized metrics
+    """
+    try:            
+        normalized_df = df.copy()
+        
+        # Define metrics to normalize (exclude metadata)
+        exclude_cols = ['Portfolio', 'Trade_Count', 'Win_Rate', 'Avg_Win', 'Avg_Loss']
+        metric_cols = [col for col in df.columns if col not in exclude_cols]
+                  
+        for col in tqdm(
+                metric_cols,
+                desc="📊 Normalizing",
+                unit="metric",
+                file=sys.stdout,
+                colour=NORMALIZE_PORTFOLIO_COLOR,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
+            ):
+            try:
+                values = df[col].replace([np.inf, -np.inf], np.nan).dropna()
+                
+                if len(values) == 0 or values.std() == 0:
+                    normalized_df[col] = 0.5  # Neutral score
+                    continue
+                
+                if NORMALIZATION_METHOD == 'robust_percentile':
+                    # Use percentile-based normalization (more robust to outliers)
+                    p25, p75 = values.quantile([0.25, 0.75])
+                    iqr = p75 - p25
+                    
+                    if iqr > 0:
+                        normalized_df[col] = (df[col] - values.median()) / iqr
+                        # Scale to 0-1 range
+                        normalized_df[col] = (normalized_df[col] + 2) / 4
+                        normalized_df[col] = normalized_df[col].clip(0, 1)
+                    else:
+                        normalized_df[col] = 0.5
+                
+                elif NORMALIZATION_METHOD == 'min_max':
+                    # Traditional min-max normalization
+                    min_val, max_val = values.min(), values.max()
+                    if max_val > min_val:
+                        normalized_df[col] = (df[col] - min_val) / (max_val - min_val)
+                    else:
+                        normalized_df[col] = 0.5
+                
+                else:  # z-score normalization
+                    normalized_df[col] = (df[col] - values.mean()) / values.std()
+                    # Convert to 0-1 scale using sigmoid
+                    normalized_df[col] = 1 / (1 + np.exp(-normalized_df[col]))
+            
+            except Exception as e:
+                print(f"   ⚠️  Normalization failed for {col}: {str(e)}")
+                normalized_df[col] = 0.5
+        
+        return normalized_df
+        
+    except Exception as e:
+        print(f"   ❌ Normalization failed: {str(e)}")
+        return df

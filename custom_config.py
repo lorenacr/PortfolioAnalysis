@@ -15,23 +15,25 @@ LOOKBACK_PERIOD = 252  # Trading days in a year
 
 # Scoring Weights (Academic/Institutional Standards)
 SCORING_WEIGHTS = {
-    'sharpe_ratio': 0.25,
-    'sortino_ratio': 0.20,
-    'max_drawdown': 0.15,
-    'var_95': 0.10,
-    'cvar_95': 0.10,
-    'calmar_ratio': 0.10,
-    'omega_ratio': 0.10
+    'sharpe_ratio': 0.10, 'sortino_ratio': 0.08, 'calmar_ratio': 0.07,
+    'omega_ratio': 0.05, 'total_return': 0.05, 'max_drawdown': 0.08,
+    'volatility': 0.05, 'var_95': 0.06, 'cvar_95': 0.06,
+    'sharpe_stability': 0.08, 'return_stability': 0.07,
+    'recovery_consistency': 0.05, 'regime_consistency': 0.05,
+    'tail_ratio': 0.05, 'cvar_99': 0.05, 'max_loss_streak': 0.05
 }
 
-# Risk Thresholds
-RISK_THRESHOLDS = {
-    'max_drawdown_limit': 0.20,  # 20% maximum drawdown
-    'min_sharpe_ratio': 1.0,     # Minimum Sharpe ratio
-    'min_sortino_ratio': 1.2,    # Minimum Sortino ratio
-    'max_var_95': 0.05,          # Maximum 5% VaR
-    'min_calmar_ratio': 0.5      # Minimum Calmar ratio
-}
+# Benefit vs cost criteria
+BENEFIT_CRITERIA = [
+    'sharpe_ratio', 'sortino_ratio', 'calmar_ratio', 'omega_ratio',
+    'total_return', 'tail_ratio', 'regime_consistency',
+    'sharpe_stability', 'return_stability', 'recovery_consistency'
+]
+
+COST_CRITERIA = [
+    'max_drawdown', 'volatility', 'var_95', 'cvar_95', 'cvar_99',
+    'max_loss_streak'
+]
 
 # Visualization Settings
 FIGURE_SIZE = (20, 15)
@@ -57,3 +59,8 @@ TOP_PERFORMERS_FILENAME = os.path.join(OUTPUT_FOLDER, 'portfolio_top_performers.
 # Market Analysis Settings
 N_REGIMES = 3
 REGIME_LABELS = ['Bear Market', 'Neutral Market', 'Bull Market']
+
+# Metrics Settings
+NORMALIZATION_METHOD = 'robust_percentile'
+SCORING_METHOD = 'topsis'
+OUTLIER_TREATMENT = 'winsorize'
