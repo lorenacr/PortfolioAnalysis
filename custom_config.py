@@ -9,9 +9,10 @@ import os
 
 # Analysis Parameters
 MIN_TRADES_THRESHOLD = 30
-CONFIDENCE_LEVEL = 0.95
-MONTE_CARLO_SIMULATIONS = 1000
-LOOKBACK_PERIOD = 252  # Trading days in a year
+SCORING_METHOD = 'topsis'
+INITIAL_CAPITAL = 1000
+TRADING_DAYS_PER_YEAR = 252
+ANNUAL_RISK_FREE_RATE = 0.01
 
 # Scoring Weights (Academic/Institutional Standards)
 SCORING_WEIGHTS = {
@@ -55,12 +56,3 @@ DASHBOARD_FILENAME = os.path.join(OUTPUT_FOLDER, 'portfolio_dashboard.png')
 REPORT_FILENAME = os.path.join(OUTPUT_FOLDER, 'portfolio_analysis_report.txt')
 RESULTS_FILENAME = os.path.join(OUTPUT_FOLDER, 'portfolio_analysis_results.csv')
 TOP_PERFORMERS_FILENAME = os.path.join(OUTPUT_FOLDER, 'portfolio_top_performers.csv')
-
-# Market Analysis Settings
-N_REGIMES = 3
-REGIME_LABELS = ['Bear Market', 'Neutral Market', 'Bull Market']
-
-# Metrics Settings
-NORMALIZATION_METHOD = 'robust_percentile'
-SCORING_METHOD = 'topsis'
-OUTLIER_TREATMENT = 'winsorize'
