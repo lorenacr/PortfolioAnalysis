@@ -12,13 +12,11 @@ from typing import Tuple, Optional, Dict
 import numpy as np
 import pandas as pd
 
-from custom_config import CONFIDENCE_LEVEL
+from custom_config import TRADING_DAYS_PER_YEAR, INITIAL_CAPITAL, ANNUAL_RISK_FREE_RATE
 
-# Base capital for converting PnL to Returns
-INITIAL_CAPITAL = 1000
-PNL_SERIES = pd.Series()
+SQRT_TRADING_DAYS_PER_YEAR = np.sqrt(252)
 
-def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> float:
+def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate=ANNUAL_RISK_FREE_RATE) -> float:
     """
     Calculate Sharpe Ratio
     
@@ -34,14 +32,14 @@ def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> 
         if returns_std == 0 or pd.isna(returns_std):
             return 0.0
 
-        daily_risk_free_rate = risk_free_rate / 252
+        daily_risk_free_rate = risk_free_rate / TRADING_DAYS_PER_YEAR
 
         # Calculate daily excess returns
         excess_returns = returns - daily_risk_free_rate
 
         # Calculate annualized metrics
-        annualized_excess_return = excess_returns.mean() * 252
-        annualized_volatility = returns.std() * np.sqrt(252)
+        annualized_excess_return = excess_returns.mean() * TRADING_DAYS_PER_YEAR
+        annualized_volatility = returns.std() * SQRT_TRADING_DAYS_PER_YEAR
 
         if annualized_volatility == 0 or pd.isna(annualized_volatility):
             return 0.0
@@ -51,7 +49,7 @@ def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> 
     except Exception:
         return 0.0
 
-def calculate_sortino_ratio(returns: pd.Series, risk_free_rate: float = 0.02) -> float:
+def calculate_sortino_ratio(returns: pd.Series, risk_free_rate=ANNUAL_RISK_FREE_RATE) -> float:
     """
     Calculate Sortino Ratio (focuses on downside deviation)
     
@@ -63,7 +61,7 @@ def calculate_sortino_ratio(returns: pd.Series, risk_free_rate: float = 0.02) ->
         Sortino ratio
     """
     try:
-        daily_risk_free_rate = risk_free_rate / 252
+        daily_risk_free_rate = risk_free_rate / TRADING_DAYS_PER_YEAR
 
         excess_returns = returns - daily_risk_free_rate
         downside_returns = excess_returns[excess_returns < 0]
@@ -102,16 +100,20 @@ def calculate_calmar_ratio(returns: pd.Series) -> float:
     except Exception:
         return 0.0
 
-def calculate_total_return() -> float:
+def calculate_total_return(pnl_series: pd.Series, initial_capital=INITIAL_CAPITAL) -> float:
     """
-    Calculate total return using equity curve approach
+    Calculate total return using the equity curve approach
+    
+    Args:
+        pnl_series: Series of portfolio PnL
+        initial_capital: Base capital (default: 1000)
     
     Returns:
         float: total return as decimal (e.g., 0.25 = 25%)
     """
     try:
-        final_capital = INITIAL_CAPITAL + PNL_SERIES.sum()
-        total_return = (final_capital - INITIAL_CAPITAL) / INITIAL_CAPITAL
+        final_capital = initial_capital + pnl_series.sum()
+        total_return = (final_capital - initial_capital) / initial_capital
         return total_return
 
     except Exception as e:
@@ -144,26 +146,23 @@ def calculate_max_drawdown(returns: pd.Series) -> float:
     except Exception:
         return 0.0
 
-def calculate_var_cvar(returns: pd.Series, confidence_level: float = None) -> Tuple[float, float]:
+def calculate_var_cvar(returns: pd.Series, percentile: float = 0.05) -> Tuple[float, float]:
     """
     Calculate Value at Risk and Conditional Value at Risk
     
     Args:
         returns: Series of portfolio returns
-        confidence_level: Confidence level (default from config)
+        percentile: Confidence level (default from config)
         
     Returns:
         Tuple of (VaR, CVaR)
     """
     try:
-        if confidence_level is None:
-            confidence_level = CONFIDENCE_LEVEL
-
         # Calculate VaR
-        var = abs(returns.quantile(confidence_level))
+        var = abs(returns.quantile(percentile))
 
         # Calculate CVaR (Expected Shortfall)
-        tail_returns = returns[returns <= returns.quantile(confidence_level)]
+        tail_returns = returns[returns <= returns.quantile(percentile)]
         cvar = abs(tail_returns.mean()) if len(tail_returns) > 0 else var
 
         return var, cvar
@@ -439,83 +438,6 @@ def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.00
 # ============================================================================
 # COMPREHENSIVE METRICS CALCULATION
 # ============================================================================
-
-def calculate_basic_metrics(returns: pd.Series) -> dict:
-    """
-    Calculate basic portfolio metrics 
-    
-    Args:
-        returns: Series of portfolio PnL
-        
-    Returns:
-        Dictionary of basic metrics
-    """
-    try:        
-        var_95, cvar_95 = calculate_var_cvar(returns, 0.05)
-        
-        metrics = {
-            'total_return': calculate_total_return(),
-            'volatility': returns.std(),
-            'sharpe_ratio': calculate_sharpe_ratio(returns),
-            'sortino_ratio': calculate_sortino_ratio(returns),
-            'calmar_ratio': calculate_calmar_ratio(returns),
-            'max_drawdown': calculate_max_drawdown(returns),
-            'var_95': var_95,
-            'cvar_95': cvar_95,
-            'omega_ratio': calculate_omega_ratio(returns)
-        }
-        
-        return metrics
-    
-    except Exception as e:
-        print(f"⚠️  Basic metrics calculation failed: {str(e)}")
-        return {}
-
-def calculate_all_enhanced_metrics(returns: pd.Series) -> dict:
-    """
-    Calculate comprehensive enhanced metrics for portfolio analysis
-    Includes all basic metrics plus advanced stability, tail risk, and regime metrics
-    
-    Args:
-        returns: Series of portfolio returns
-        
-    Returns:
-        Dictionary of all enhanced metrics
-    """
-    try:        
-        # Start with basic metrics
-        metrics = calculate_basic_metrics(returns)
-        
-        if not metrics:
-            print("❌ Basic metrics calculation failed")
-            return {}
-        
-        # Add enhanced stability metrics
-        metrics.update({
-            'sharpe_stability': calculate_sharpe_stability(returns),
-            'return_stability': calculate_return_stability(returns),
-            'recovery_consistency': calculate_recovery_consistency(returns)
-        })
-        
-        # Add enhanced tail risk metrics
-        metrics.update({
-            'tail_ratio': calculate_tail_ratio(returns),
-            'max_loss_streak': calculate_max_loss_streak(returns)
-        })
-        
-        # Add multi-level CVaR
-        cvar_metrics = calculate_multi_level_cvar(returns)
-        metrics.update(cvar_metrics)
-        
-        # Add regime analysis
-        metrics['regime_consistency'] = calculate_regime_consistency(returns)
-        
-        return metrics
-        
-    except Exception as e:
-        print(f"❌ Enhanced metrics calculation failed: {str(e)}")
-        return {}
-
 def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
                                 portfolio_name: str) -> Optional[Dict]:
     """
@@ -530,32 +452,58 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
     """
     try:
         # Convert P&L to returns
-        global PNL_SERIES
-        PNL_SERIES = pd.to_numeric(portfolio_data['Profit/Loss'], errors='coerce').dropna()
+        pnl_series = pd.to_numeric(portfolio_data['Profit/Loss'], errors='coerce').dropna()
 
-        if len(PNL_SERIES) == 0:
+        if len(pnl_series) == 0:
             print(f"   ❌ {portfolio_name}: No valid P&L data")
             return None
 
         # Calculate returns
-        returns = convert_pnl_to_returns(PNL_SERIES)
+        returns = convert_pnl_to_returns(pnl_series)
         if len(returns) == 0:
             print(f"   ❌ {portfolio_name}: Failed to convert PnL to returns")
             return {}
-        
-        # Calculate all enhanced metrics
-        metrics = calculate_all_enhanced_metrics(returns)
 
-        if not metrics:
-            print(f"   ❌ {portfolio_name}: Metrics calculation failed")
-            return None
+        var_95, cvar_95 = calculate_var_cvar(returns)
 
-        # Add portfolio metadata
-        metrics['Portfolio'] = portfolio_name
-        metrics['Trade_Count'] = len(PNL_SERIES)
-        metrics['Win_Rate'] = (PNL_SERIES > 0).mean()
-        metrics['Avg_Win'] = PNL_SERIES[PNL_SERIES > 0].mean() if (PNL_SERIES > 0).any() else 0
-        metrics['Avg_Loss'] = PNL_SERIES[PNL_SERIES < 0].mean() if (PNL_SERIES < 0).any() else 0
+        metrics = {
+            # Portfolio name
+            'portfolio': portfolio_name,
+            
+            # Basic metrics
+            'total_return': calculate_total_return(pnl_series),
+            'volatility': returns.std() * SQRT_TRADING_DAYS_PER_YEAR,
+            'sharpe_ratio': calculate_sharpe_ratio(returns),
+            'sortino_ratio': calculate_sortino_ratio(returns),
+            'calmar_ratio': calculate_calmar_ratio(returns),
+            'max_drawdown': calculate_max_drawdown(returns),
+            'var_95': var_95,
+            'cvar_95': cvar_95,
+            'omega_ratio': calculate_omega_ratio(returns),
+
+            # Stability metrics
+            'sharpe_stability': calculate_sharpe_stability(returns),
+            'return_stability': calculate_return_stability(returns),
+            'recovery_consistency': calculate_recovery_consistency(returns),
+            
+            # Tail risk metrics
+            'tail_ratio': calculate_tail_ratio(returns),
+            'max_loss_streak': calculate_max_loss_streak(returns),
+            
+            # Regime metrics
+            'regime_consistency': calculate_regime_consistency(returns),
+            
+            # Portfolio metadata
+            'trade_count': len(pnl_series),
+            'win_rate': (pnl_series > 0).mean(),
+            'profit_factor': pnl_series[pnl_series > 0].sum() / abs(pnl_series[pnl_series < 0].sum()),
+            'avg_win': pnl_series[pnl_series > 0].mean(),
+            'avg_loss': pnl_series[pnl_series < 0].mean(),
+        }
+
+        # Add multi-level CVaR
+        cvar_metrics = calculate_multi_level_cvar(returns)
+        metrics.update(cvar_metrics)
 
         return metrics
 
@@ -563,13 +511,13 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
         print(f"   ❌ {portfolio_name}: Analysis failed - {str(e)}")
         return None
 
-def convert_pnl_to_returns(pnl_series, capital_base=INITIAL_CAPITAL):
+def convert_pnl_to_returns(pnl_series: pd.Series, initial_capital=INITIAL_CAPITAL):
     """
-    Convert PnL to returns using fixed capital base
+    Convert PnL to returns using a fixed capital base
     
     Args:
         pnl_series: series of PnL values
-        capital_base: base capital for conversion (default: 1000)
+        initial_capital: base capital for conversion (default: 1000)
     
     Returns:
         pd.Series: normalized returns
@@ -579,7 +527,7 @@ def convert_pnl_to_returns(pnl_series, capital_base=INITIAL_CAPITAL):
             return pd.Series([], dtype=float)
 
         # Convert PnL to returns using base capital
-        returns = pnl_series / capital_base
+        returns = pnl_series / initial_capital
 
         # Remove infinite values and NaN
         returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
