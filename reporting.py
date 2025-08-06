@@ -54,7 +54,7 @@ Risk Assessment: Comprehensive multi-metric evaluation
 
 TOP PERFORMING PORTFOLIO
 ========================
-Portfolio: {best_portfolio['Portfolio']}
+Portfolio: {best_portfolio['portfolio']}
 Composite Score: {best_portfolio['Composite_Score']:.3f}
 Sharpe Ratio: {best_portfolio['Sharpe_Ratio']:.3f}
 Sortino Ratio: {best_portfolio['Sortino_Ratio']:.3f}
@@ -98,7 +98,7 @@ TOP 10 PORTFOLIOS BY COMPOSITE SCORE
         top_10 = results_df.nlargest(10, 'Composite_Score')
         for i, (idx, portfolio) in enumerate(top_10.iterrows(), 1):
             report_content += f"""
-{i:2d}. {portfolio['Portfolio']}
+{i:2d}. {portfolio['portfolio']}
     Composite Score: {portfolio['Composite_Score']:.3f}
     Sharpe Ratio: {portfolio['Sharpe_Ratio']:.3f}
     Max Drawdown: {portfolio['Max_Drawdown']:.2%}
@@ -211,7 +211,7 @@ def generate_executive_summary(results_df: pd.DataFrame):
             'Total Portfolios Analyzed': len(results_df),
             'Average Sharpe Ratio': results_df['sharpe_ratio'].mean(),
             'Average Max Drawdown': results_df['max_drawdown'].mean(),
-            'Best Performing Portfolio': results_df.iloc[0]['Portfolio'],
+            'Best Performing Portfolio': results_df.iloc[0]['portfolio'],
             'Highest Sharpe Ratio': results_df['sharpe_ratio'].max(),
             'Average Stability Score': results_df.get('sharpe_stability', pd.Series([0])).mean()
         }
@@ -224,7 +224,6 @@ def generate_executive_summary(results_df: pd.DataFrame):
 
     except Exception as e:
         print(f"❌ Executive summary creation failed: {str(e)}")
-
 
 def generate_portfolio_recommendations(results_df: pd.DataFrame, top_n: int = 5):
     """
@@ -244,8 +243,8 @@ def generate_portfolio_recommendations(results_df: pd.DataFrame, top_n: int = 5)
         top_performers_df = results_df.head(top_n)
 
         # Key metrics for top performers
-        key_metrics = ['Portfolio', 'Final_Score', 'Final_Rank', 'sharpe_ratio',
-                       'max_drawdown', 'total_return', 'Trade_Count']
+        key_metrics = ['portfolio', 'Final_Score', 'Final_Rank', 'sharpe_ratio',
+                       'max_drawdown', 'total_return', 'trade_count']
 
         # Filter to available metrics
         available_key_metrics = [col for col in key_metrics if col in top_performers_df.columns]
@@ -254,14 +253,14 @@ def generate_portfolio_recommendations(results_df: pd.DataFrame, top_n: int = 5)
 
         print(f"Top {top_n} portfolios by composite score:")
         for idx, row in top_performers_summary.iterrows():
-            portfolio_name = row['Portfolio']
+            portfolio_name = row['portfolio']
             score = row.get('Final_Score', 0)
             rank = row.get('Final_Rank', 0)
             print(f"   #{int(rank):2d}: {portfolio_name} (Score: {score:.4f})")
 
         # Save top performers report
         top_performers_summary.to_csv(TOP_PERFORMERS_FILENAME)
-        print(f"💾 Top performers report saved to: {TOP_PERFORMERS_FILENAME}")
+        print(f"\n💾 Top performers report saved to: {TOP_PERFORMERS_FILENAME}")
 
     except Exception as e:
         print(f"❌ Recommendation generation failed: {str(e)}")

@@ -1,185 +1,194 @@
 """
-Visualization Module for Portfolio Analysis Framework
-====================================================
+Portfolio Visualization Module
+==================================================
 
-Handles all visualization, dashboard creation, and plotting functionality
-for portfolio analysis results.
+A robust visualization module for portfolio analysis with comprehensive error handling.
 """
 
+import warnings
+
 import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import seaborn as sns
 
-from custom_config import COLOR_PALETTE, DASHBOARD_FILENAME, FIGURE_SIZE
+from custom_config import DASHBOARD_FILENAME, FIGURE_SIZE
 
-# Set style
-plt.style.use('default')  # Use default instead of seaborn-v0_8-darkgrid
-sns.set_palette(COLOR_PALETTE)
+warnings.filterwarnings('ignore')
 
-def create_performance_dashboard(results_df: pd.DataFrame, save_path: str = DASHBOARD_FILENAME):
+def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
     """
-    Create a comprehensive performance dashboard
+    Create a comprehensive performance dashboard.
     
     Args:
         results_df: DataFrame with portfolio analysis results
-        save_path: Path to save the dashboard
+        save_path: Path to save dashboard image
+        
+    Returns:
+        bool: Success status
     """
-    if results_df.empty:
-        print("⚠️  No data available for dashboard creation")
-        return
-    
-    # Create a figure with subplots
-    # Create figure with 2x3 layout for the 6 essential charts
-    fig, axes = plt.subplots(2, 3, figsize=FIGURE_SIZE)
-    fig.suptitle('Portfolio Performance Dashboard', fontsize=20, fontweight='bold')
+    if results_df is None or results_df.empty:
+        print("⚠️ No data available for dashboard creation")
+        return False
 
-    # ============================================================================
-    # 1. RISK-RETURN EFFICIENCY SCATTER (Top Left)
-    # ============================================================================
-    ax1 = axes[0, 0]
-    scatter = ax1.scatter(results_df['volatility'], results_df['total_return'],
-                          c=results_df['sharpe_ratio'], s=80, alpha=0.8, cmap='RdYlGn', edgecolors='black', linewidth=0.5)
-    ax1.set_xlabel('Volatility (Risk)')
-    ax1.set_ylabel('Total Return')
-    ax1.set_title('Risk-Return Efficiency')
-    ax1.grid(True, alpha=0.3)
+    print(f"\n📊 Creating comprehensive dashboard with {len(results_df)} portfolios...")
 
-    # Add colorbar
-    cbar1 = plt.colorbar(scatter, ax=ax1)
-    cbar1.set_label('Sharpe Ratio')
+    try:
+        # Create figure with 2x3 layout
+        fig, axes = plt.subplots(2, 3, figsize=FIGURE_SIZE)
+        fig.suptitle('Portfolio Performance Dashboard - Comprehensive Analysis',
+                     fontsize=20, y=0.98)
 
-    # ============================================================================
-    # 2. DRAWDOWN vs RETURN ANALYSIS (Top Center)  
-    # ============================================================================
-    ax2 = axes[0, 1]
-    # Color coding: Green <10%, Orange 10-20%, Red >20%
-    colors = ['green' if dd < 0.1 else 'orange' if dd < 0.2 else 'red'
-              for dd in results_df['max_drawdown']]
+        # 1. Risk-Return Scatter (Top Left)
+        print("  📈 Creating Risk-Return scatter plot...")
+        if all(col in results_df.columns for col in ['volatility', 'total_return', 'sharpe_ratio']):
+            scatter = axes[0, 0].scatter(
+                results_df['volatility'],
+                results_df['total_return'],
+                c=results_df['sharpe_ratio'],
+                s=80,
+                alpha=0.8,
+                cmap='RdYlGn',
+                edgecolors='black',
+                linewidth=0.5
+            )
+            axes[0, 0].set_xlabel('Volatility (Risk)', fontsize=12)
+            axes[0, 0].set_ylabel('Total Return', fontsize=12)
+            axes[0, 0].set_title('Risk-Return Efficiency\n(Color = Sharpe Ratio)', fontsize=14)
+            axes[0, 0].grid(True, alpha=0.3)
 
-    ax2.scatter(results_df['max_drawdown'], results_df['total_return'],
-                c=colors, alpha=0.8, s=80, edgecolors='black', linewidth=0.5)
-    ax2.set_xlabel('Maximum Drawdown')
-    ax2.set_ylabel('Total Return')
-    ax2.set_title('Drawdown vs Return')
-    ax2.grid(True, alpha=0.3)
-
-    # Add legend for colors
-    from matplotlib.patches import Patch
-    legend_elements = [Patch(facecolor='green', label='Safe (<10% DD)'),
-                       Patch(facecolor='orange', label='Moderate (10-20% DD)'),
-                       Patch(facecolor='red', label='High Risk (>20% DD)')]
-    ax2.legend(handles=legend_elements, loc='upper right')
-
-    # ============================================================================
-    # 3. TRADING QUALITY ANALYSIS (Top Right)
-    # ============================================================================
-    ax3 = axes[0, 2]
-    profit_factor = results_df['Avg_Win'] / abs(results_df['Avg_Loss'])
-    scatter3 = ax3.scatter(results_df['Win_Rate'], profit_factor,
-                           c=results_df['Trade_Count'], s=80, alpha=0.8, cmap='viridis',
-                           edgecolors='black', linewidth=0.5)
-    ax3.set_xlabel('Win Rate')
-    ax3.set_ylabel('Profit Factor')
-    ax3.set_title('Trading Quality')
-    ax3.grid(True, alpha=0.3)
-
-    # Add colorbar
-    cbar3 = plt.colorbar(scatter3, ax=ax3)
-    cbar3.set_label('Trade Count')
-
-    # Add reference lines
-    ax3.axhline(y=1.5, color='red', linestyle='--', alpha=0.7, label='Min Profit Factor (1.5)')
-    ax3.axvline(x=0.5, color='red', linestyle='--', alpha=0.7, label='Min Win Rate (50%)')
-
-    # ============================================================================
-    # 4. SHARPE RATIO DISTRIBUTION (Bottom Left)
-    # ============================================================================
-    ax4 = axes[1, 0]
-    n, bins, patches = ax4.hist(results_df['sharpe_ratio'], bins=30, alpha=0.8,
-                                color='skyblue', edgecolor='black', linewidth=1)
-
-    # Color bars based on Sharpe quality
-    for i, (patch, bin_val) in enumerate(zip(patches, bins[:-1])):
-        if bin_val < 1:
-            patch.set_facecolor('red')
-        elif bin_val < 2:
-            patch.set_facecolor('orange')
+            cbar = plt.colorbar(scatter, ax=axes[0, 0])
+            cbar.set_label('Sharpe Ratio\n(Higher = Better)', fontsize=10)
         else:
-            patch.set_facecolor('green')
+            axes[0, 0].text(0.5, 0.5, 'Missing risk-return data', ha='center', va='center', transform=axes[0, 0].transAxes)
+            axes[0, 0].set_title('Risk-Return Efficiency (Missing Data)')
 
-    # Add statistics lines
-    median_sharpe = results_df['sharpe_ratio'].median()
-    mean_sharpe = results_df['sharpe_ratio'].mean()
-    ax4.axvline(median_sharpe, color='blue', linestyle='--', linewidth=2,
-                label=f'Median: {median_sharpe:.2f}')
-    ax4.axvline(mean_sharpe, color='red', linestyle='-', linewidth=2,
-                label=f'Mean: {mean_sharpe:.2f}')
+        # 2. Drawdown Analysis (Top Center)
+        print("  📉 Creating Drawdown analysis...")
+        if all(col in results_df.columns for col in ['max_drawdown', 'total_return']):
+            # Simple color coding based on drawdown
+            colors = ['green' if dd > -0.1 else 'orange' if dd > -0.2 else 'red'
+                      for dd in results_df['max_drawdown']]
 
-    ax4.set_xlabel('Sharpe Ratio')
-    ax4.set_ylabel('Frequency')
-    ax4.set_title('Sharpe Ratio Distribution')
-    ax4.grid(True, alpha=0.3)
+            axes[0, 1].scatter(
+                results_df['max_drawdown'],
+                results_df['total_return'],
+                c=colors,
+                alpha=0.8,
+                s=80,
+                edgecolors='black',
+                linewidth=0.5
+            )
+            axes[0, 1].set_xlabel('Max Drawdown', fontsize=12)
+            axes[0, 1].set_ylabel('Total Return', fontsize=12)
+            axes[0, 1].set_title('Drawdown vs Return Analysis\n(Color = Risk Level)', fontsize=14)
+            axes[0, 1].grid(True, alpha=0.3)
+        else:
+            axes[0, 1].text(0.5, 0.5, 'Missing drawdown data', ha='center', va='center', transform=axes[0, 1].transAxes)
+            axes[0, 1].set_title('Drawdown Analysis (Missing Data)')
 
-    # ============================================================================
-    # 5. CONSISTENCY & STABILITY METRICS (Bottom Center)
-    # ============================================================================
-    ax5 = axes[1, 1]
-    stability_metrics = ['sharpe_stability', 'return_stability', 'recovery_consistency']
-    stability_data = [results_df[metric] for metric in stability_metrics]
+        # 3. Sharpe Distribution (Top Right)
+        print("  📊 Creating Sharpe Ratio distribution...")
+        if 'sharpe_ratio' in results_df.columns:
+            clean_sharpe = results_df['sharpe_ratio'].dropna()
+            if not clean_sharpe.empty:
+                axes[0, 2].hist(clean_sharpe, bins=15, alpha=0.8, color='skyblue', edgecolor='black')
+                axes[0, 2].axvline(clean_sharpe.median(), color='red', linestyle='--',
+                                   label=f'Median: {clean_sharpe.median():.2f}')
+                axes[0, 2].set_xlabel('Sharpe Ratio')
+                axes[0, 2].set_ylabel('Frequency')
+                axes[0, 2].set_title('Sharpe Ratio Distribution')
+                axes[0, 2].grid(True, alpha=0.3)
+                axes[0, 2].legend()
+            else:
+                axes[0, 2].text(0.5, 0.5, 'No valid Sharpe data', ha='center', va='center', transform=axes[0, 2].transAxes)
+        else:
+            axes[0, 2].text(0.5, 0.5, 'sharpe_ratio column not found', ha='center', va='center', transform=axes[0, 2].transAxes)
 
-    # Create boxplot with custom colors
-    bp = ax5.boxplot(stability_data, labels=['Sharpe\nStability', 'Return\nStability', 'Recovery\nConsistency'],
-                     patch_artist=True, notch=True)
+        # 4. Top Performers (Bottom Left)
+        print("  🏆 Creating top performers ranking...")
+        if 'Final_Score' in results_df.columns and 'portfolio' in results_df.columns:
+            top_10 = results_df.nlargest(10, 'Final_Score')
+            if not top_10.empty:
+                y_pos = range(len(top_10))
+                bars = axes[1, 0].barh(y_pos, top_10['Final_Score'], color='lightgreen', edgecolor='black')
+                axes[1, 0].set_yticks(y_pos)
+                clean_names = [name.replace('Portfolio ', 'P') for name in top_10['portfolio']]
+                axes[1, 0].set_yticklabels(clean_names, fontsize=8)
+                axes[1, 0].set_xlabel('Final Score')
+                axes[1, 0].set_title('Top 10 Portfolios')
+                axes[1, 0].grid(True, alpha=0.3)
 
-    colors = ['lightcoral', 'lightblue', 'lightgreen']
-    for patch, color in zip(bp['boxes'], colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.8)
+                # Add values on bars
+                for i, bar in enumerate(bars):
+                    width = bar.get_width()
+                    axes[1, 0].text(width + 0.01, bar.get_y() + bar.get_height()/2,
+                                    f'{width:.2f}', ha='left', va='center', fontsize=8)
+            else:
+                axes[1, 0].text(0.5, 0.5, 'No data for top performers', ha='center', va='center', transform=axes[1, 0].transAxes)
+        else:
+            axes[1, 0].text(0.5, 0.5, 'Final_Score or Portfolio columns not found', ha='center', va='center', transform=axes[1, 0].transAxes)
 
-    ax5.set_ylabel('Stability Score (0-1)')
-    ax5.set_title('Stability Metrics')
-    ax5.grid(True, alpha=0.3)
-    ax5.set_ylim(0, 1.1)
+        # 5. Trading Quality (Bottom Center)
+        print("  🎯 Creating trading quality analysis...")
+        if all(col in results_df.columns for col in ['win_rate', 'avg_win', 'avg_loss']):
+            axes[1, 1].scatter(
+                results_df['win_rate'],
+                results_df['profit_factor'],
+                c=results_df['win_rate'],
+                s=80,
+                alpha=0.8,
+                cmap='RdYlGn',
+                edgecolors='black',
+                linewidth=0.5
+            )
+            axes[1, 1].set_xlabel('Win Rate')
+            axes[1, 1].set_ylabel('Profit Factor')
+            axes[1, 1].set_title('Trading Quality\n(Win Rate vs Profit Factor)')
+            axes[1, 1].grid(True, alpha=0.3)
 
-    # Add reference line for good stability
-    ax5.axhline(y=0.7, color='red', linestyle='--', alpha=0.7, label='Good Stability (0.7+)')
+            # Add reference lines
+            axes[1, 1].axhline(y=1.0, color='red', linestyle='--', alpha=0.7, label='Break-even')
+            axes[1, 1].axvline(x=0.5, color='gray', linestyle='--', alpha=0.7, label='50% Win Rate')
+            axes[1, 1].legend()
+        else:
+            axes[1, 1].text(0.5, 0.5, 'Missing trading data', ha='center', va='center', transform=axes[1, 1].transAxes)
 
-    # ============================================================================
-    # 6. FINAL RANKING - TOP PERFORMERS (Bottom Right)
-    # ============================================================================
-    ax6 = axes[1, 2]
-    top_10 = results_df.nlargest(10, 'Final_Score')
+        # 6. Performance Distribution (Bottom Right)
+        print("  📈 Creating performance distribution...")
+        if 'Final_Score' in results_df.columns:
+            clean_scores = results_df['Final_Score'].dropna()
+            if not clean_scores.empty:
+                axes[1, 2].hist(clean_scores, bins=15, alpha=0.8, color='lightcoral', edgecolor='black')
+                axes[1, 2].axvline(clean_scores.median(), color='red', linestyle='--',
+                                   label=f'Median: {clean_scores.median():.3f}')
+                axes[1, 2].set_xlabel('Final Score')
+                axes[1, 2].set_ylabel('Frequency')
+                axes[1, 2].set_title('Performance Score\nDistribution')
+                axes[1, 2].grid(True, alpha=0.3)
+                axes[1, 2].legend()
+            else:
+                axes[1, 2].text(0.5, 0.5, 'No valid score data', ha='center', va='center', transform=axes[1, 2].transAxes)
+        else:
+            axes[1, 2].text(0.5, 0.5, 'No performance data available', ha='center', va='center', transform=axes[1, 2].transAxes)
 
-    # Create horizontal bar chart with gradient colors
-    bars = ax6.barh(range(len(top_10)), top_10['Final_Score'],
-                    color=plt.cm.RdYlGn(np.linspace(0.4, 1, len(top_10))),
-                    edgecolor='black', linewidth=0.5)
+        # Adjust layout
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
 
-    ax6.set_yticks(range(len(top_10)))
-    ax6.set_yticklabels([p.replace('Portfolio ', 'P') for p in top_10['Portfolio']])
-    ax6.set_xlabel('Final Composite Score')
-    ax6.set_title('Top 10 Portfolios')
-    ax6.grid(True, alpha=0.3, axis='x')
+        # Save dashboard
+        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
 
-    # Add score values on bars
-    for (bar, score) in enumerate(zip(bars, top_10['Final_Score'])):
-        ax6.text(score + 0.01 * score, bar.get_y() + bar.get_height()/2, f'{score:.2f}',
-                 va='center', ha='left')
+        print(f"\n✅ Dashboard creation completed!")
+        print(f"   📁 Saved to: {save_path}")
 
-    # Adjust layout and save
-    plt.tight_layout(rect=[0, 0, 1, 0.93]) # Adjust layout to make space for the suptitle
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"✅ Essential portfolio dashboard saved to: {save_path}")
+        # Show dashboard
+        plt.show()
 
-    for i, (bar, score) in enumerate(zip(bars, top_10['Final_Score'])):
-        ax6.text(score + 0.001, i, f'{score:.3f}', va='center')
+        return True
 
-    # ============================================================================
-    # FINAL LAYOUT AND SAVE
-    # ============================================================================
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.92)  # Make room for main title
-    plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
-    print(f"📊 ESSENTIAL DASHBOARD saved to: {save_path}")
-    plt.show()
+    except Exception as e:
+        print(f"❌ Critical error creating dashboard: {str(e)}")
+        return False
+
+    finally:
+        plt.close('all')
+
+if __name__ == "__main__":
+    print("📊 Portfolio Visualization Module - Simplified Version")
