@@ -59,7 +59,7 @@ Composite Score: {best_portfolio['Composite_Score']:.3f}
 Sharpe Ratio: {best_portfolio['Sharpe_Ratio']:.3f}
 Sortino Ratio: {best_portfolio['Sortino_Ratio']:.3f}
 Maximum Drawdown: {best_portfolio['Max_Drawdown']:.2%}
-Total Return: {best_portfolio['Total_Return']:.2f}%
+CAGR: {best_portfolio['cagr']:.2f}%
 VaR (95%): {best_portfolio['VaR_95']:.3f}
 CVaR (95%): {best_portfolio['CVaR_95']:.3f}
 
@@ -102,7 +102,7 @@ TOP 10 PORTFOLIOS BY COMPOSITE SCORE
     Composite Score: {portfolio['Composite_Score']:.3f}
     Sharpe Ratio: {portfolio['Sharpe_Ratio']:.3f}
     Max Drawdown: {portfolio['Max_Drawdown']:.2%}
-    Total Return: {portfolio['Total_Return']:.2f}%
+    CAGR: {portfolio['cagr']:.2f}%
 """
         
         # Add risk warnings
@@ -244,7 +244,7 @@ def generate_portfolio_recommendations(results_df: pd.DataFrame, top_n: int = 5)
 
         # Key metrics for top performers
         key_metrics = ['portfolio', 'Final_Score', 'Final_Rank', 'sharpe_ratio',
-                       'max_drawdown', 'total_return', 'trade_count']
+                       'max_drawdown', 'cagr', 'trade_count']
 
         # Filter to available metrics
         available_key_metrics = [col for col in key_metrics if col in top_performers_df.columns]

@@ -17,7 +17,7 @@ ANNUAL_RISK_FREE_RATE = 0.01
 # Scoring Weights (Academic/Institutional Standards)
 SCORING_WEIGHTS = {
     'sharpe_ratio': 0.10, 'sortino_ratio': 0.08, 'calmar_ratio': 0.07,
-    'omega_ratio': 0.05, 'total_return': 0.05, 'max_drawdown': 0.08,
+    'omega_ratio': 0.05, 'cagr': 0.05, 'max_drawdown': 0.08,
     'volatility': 0.05, 'var_95': 0.06, 'cvar_95': 0.06,
     'sharpe_stability': 0.08, 'return_stability': 0.07,
     'recovery_consistency': 0.05, 'regime_consistency': 0.05,
@@ -27,7 +27,7 @@ SCORING_WEIGHTS = {
 # Benefit vs cost criteria
 BENEFIT_CRITERIA = [
     'sharpe_ratio', 'sortino_ratio', 'calmar_ratio', 'omega_ratio',
-    'total_return', 'tail_ratio', 'regime_consistency',
+    'cagr', 'tail_ratio', 'regime_consistency',
     'sharpe_stability', 'return_stability', 'recovery_consistency'
 ]
 

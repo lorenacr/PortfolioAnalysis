@@ -73,6 +73,10 @@ def clean_portfolio_data(df: pd.DataFrame, portfolio_name: str) -> Optional[pd.D
     # Convert profit/loss to numeric
     df_clean[profit_col] = pd.to_numeric(df_clean[profit_col], errors='coerce')
     
+    # Convert date to datetime format
+    df_clean['Open time'] = pd.to_datetime(df_clean['Open time'], errors='coerce')
+    df_clean['Close time'] = pd.to_datetime(df_clean['Close time'], errors='coerce')
+    
     # Remove rows with NaN values in the profit / loss column
     df_clean = df_clean.dropna(subset=[profit_col])
     

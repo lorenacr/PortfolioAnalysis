@@ -6,9 +6,8 @@ Contains all performance metric calculations used in portfolio analysis.
 Implements institutional-grade financial metrics with academic standards.
 Enhanced with advanced stability, tail risk, and regime analysis metrics.
 """
-
 from typing import Tuple, Optional, Dict
-
+from datetime import datetime
 import numpy as np
 import pandas as pd
 
@@ -100,21 +99,26 @@ def calculate_calmar_ratio(returns: pd.Series) -> float:
     except Exception:
         return 0.0
 
-def calculate_total_return(pnl_series: pd.Series, initial_capital=INITIAL_CAPITAL) -> float:
+def calculate_cagr(pnl_series: pd.Series, total_years_of_trading: float, initial_capital=INITIAL_CAPITAL) -> float:
     """
-    Calculate total return using the equity curve approach
+    Calculate Compound Annual Growth Rate (CAGR)
+    Link to CAGR formula: 
+		http://www.investopedia.com/ask/answers/071014/what-formula-calculating-compound-annual-growth-rate-cagr-excel.asp
     
     Args:
         pnl_series: Series of portfolio PnL
         initial_capital: Base capital (default: 1000)
-    
+        total_years_of_trading: Total trading history in years
+        
     Returns:
-        float: total return as decimal (e.g., 0.25 = 25%)
+        float: CAGR as decimal (e.g., 0.25 = 25%)
     """
-    try:
+    try:        
         final_capital = initial_capital + pnl_series.sum()
-        total_return = (final_capital - initial_capital) / initial_capital
-        return total_return
+        temp1 = final_capital / initial_capital
+        temp2 = 1.0 / total_years_of_trading
+        
+        return pow(temp1, temp2) - 1.0
 
     except Exception as e:
         print(f"⚠️ Calculation error: {e}")
@@ -450,7 +454,12 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
     Returns:
         Dictionary of calculated metrics or None if failed
     """
-    try:
+    try:      
+        # Calculate total trading history in years
+        start_date = portfolio_data['Open time'].min()
+        end_date = portfolio_data['Close time'].max()
+        total_years_of_trading = (end_date - start_date).days / 365
+        
         # Convert P&L to returns
         pnl_series = pd.to_numeric(portfolio_data['Profit/Loss'], errors='coerce').dropna()
 
@@ -471,7 +480,7 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
             'portfolio': portfolio_name,
             
             # Basic metrics
-            'total_return': calculate_total_return(pnl_series),
+            'cagr': calculate_cagr(pnl_series, total_years_of_trading),
             'volatility': returns.std() * SQRT_TRADING_DAYS_PER_YEAR,
             'sharpe_ratio': calculate_sharpe_ratio(returns),
             'sortino_ratio': calculate_sortino_ratio(returns),

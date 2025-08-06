@@ -38,10 +38,10 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
 
         # 1. Risk-Return Scatter (Top Left)
         print("  📈 Creating Risk-Return scatter plot...")
-        if all(col in results_df.columns for col in ['volatility', 'total_return', 'sharpe_ratio']):
+        if all(col in results_df.columns for col in ['volatility', 'cagr', 'sharpe_ratio']):
             scatter = axes[0, 0].scatter(
                 results_df['volatility'],
-                results_df['total_return'],
+                results_df['cagr'],
                 c=results_df['sharpe_ratio'],
                 s=80,
                 alpha=0.8,
@@ -50,7 +50,7 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
                 linewidth=0.5
             )
             axes[0, 0].set_xlabel('Volatility (Risk)', fontsize=12)
-            axes[0, 0].set_ylabel('Total Return', fontsize=12)
+            axes[0, 0].set_ylabel('CAGR', fontsize=12)
             axes[0, 0].set_title('Risk-Return Efficiency\n(Color = Sharpe Ratio)', fontsize=14)
             axes[0, 0].grid(True, alpha=0.3)
 
@@ -62,14 +62,14 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
 
         # 2. Drawdown Analysis (Top Center)
         print("  📉 Creating Drawdown analysis...")
-        if all(col in results_df.columns for col in ['max_drawdown', 'total_return']):
+        if all(col in results_df.columns for col in ['max_drawdown', 'cagr']):
             # Simple color coding based on drawdown
             colors = ['green' if dd > -0.1 else 'orange' if dd > -0.2 else 'red'
                       for dd in results_df['max_drawdown']]
 
             axes[0, 1].scatter(
                 results_df['max_drawdown'],
-                results_df['total_return'],
+                results_df['cagr'],
                 c=colors,
                 alpha=0.8,
                 s=80,
@@ -77,7 +77,7 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
                 linewidth=0.5
             )
             axes[0, 1].set_xlabel('Max Drawdown', fontsize=12)
-            axes[0, 1].set_ylabel('Total Return', fontsize=12)
+            axes[0, 1].set_ylabel('CAGR', fontsize=12)
             axes[0, 1].set_title('Drawdown vs Return Analysis\n(Color = Risk Level)', fontsize=14)
             axes[0, 1].grid(True, alpha=0.3)
         else:
