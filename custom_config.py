@@ -37,7 +37,7 @@ COST_CRITERIA = [
 ]
 
 # Visualization Settings
-FIGURE_SIZE = (20, 15)
+FIGURE_SIZE = (24, 16)
 DPI = 300
 COLOR_PALETTE = 'viridis'
 STYLE = 'seaborn-v0_8'

@@ -8,8 +8,9 @@ A robust visualization module for portfolio analysis with comprehensive error ha
 import warnings
 
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-from custom_config import DASHBOARD_FILENAME, FIGURE_SIZE
+from custom_config import DASHBOARD_FILENAME, FIGURE_SIZE, DPI
 
 warnings.filterwarnings('ignore')
 
@@ -24,171 +25,97 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
     Returns:
         bool: Success status
     """
-    if results_df is None or results_df.empty:
-        print("⚠️ No data available for dashboard creation")
-        return False
+    print(f"📊 Creating comprehensive dashboard...")
 
-    print(f"\n📊 Creating comprehensive dashboard with {len(results_df)} portfolios...")
+    # 1. Risk-Return scatter
+    print("  📈 Creating Risk-Return scatter plot...")
+    fig, axes = plt.subplots(2, 3, figsize=(FIGURE_SIZE[0] * 1.3, FIGURE_SIZE[1] * 1.3))
+    fig.suptitle("Portfolio Performance Dashboard - Comprehensive Analysis", fontsize=20, y=0.98)
 
-    try:
-        # Create figure with 2x3 layout
-        fig, axes = plt.subplots(2, 3, figsize=FIGURE_SIZE)
-        fig.suptitle('Portfolio Performance Dashboard - Comprehensive Analysis',
-                     fontsize=20, y=0.98)
+    ax = axes[0, 0]
+    scatter = ax.scatter(
+        results_df["volatility"],
+        results_df["cagr"],
+        c=results_df["sharpe_ratio"],
+        cmap="RdYlGn",
+        s=80,
+        alpha=0.8,
+        edgecolors="black",
+        linewidth=0.5
+    )
+    ax.set_title("Risk-Return Efficiency\n(Color = Sharpe Ratio)", fontsize=14)
+    ax.set_xlabel("Volatility (Risk)", fontsize=12)
+    ax.set_ylabel("CAGR", fontsize=12)
+    ax.grid(True, alpha=0.3)
+    plt.colorbar(scatter, ax=ax).set_label("Sharpe Ratio\n(Higher = Better)", fontsize=10)
 
-        # 1. Risk-Return Scatter (Top Left)
-        print("  📈 Creating Risk-Return scatter plot...")
-        if all(col in results_df.columns for col in ['volatility', 'cagr', 'sharpe_ratio']):
-            scatter = axes[0, 0].scatter(
-                results_df['volatility'],
-                results_df['cagr'],
-                c=results_df['sharpe_ratio'],
-                s=80,
-                alpha=0.8,
-                cmap='RdYlGn',
-                edgecolors='black',
-                linewidth=0.5
-            )
-            axes[0, 0].set_xlabel('Volatility (Risk)', fontsize=12)
-            axes[0, 0].set_ylabel('CAGR', fontsize=12)
-            axes[0, 0].set_title('Risk-Return Efficiency\n(Color = Sharpe Ratio)', fontsize=14)
-            axes[0, 0].grid(True, alpha=0.3)
+    # 2. Drawdown analysis
+    print("  📉 Creating Drawdown analysis...")
+    ax = axes[0, 1]
+    sns.violinplot(y=results_df["max_drawdown"], ax=ax, color="lightcoral", inner="quartile")
+    ax.set_title("Drawdown Distribution", fontsize=14)
+    ax.set_ylabel("Max Drawdown", fontsize=12)
+    ax.grid(True, alpha=0.3)
 
-            cbar = plt.colorbar(scatter, ax=axes[0, 0])
-            cbar.set_label('Sharpe Ratio\n(Higher = Better)', fontsize=10)
-        else:
-            axes[0, 0].text(0.5, 0.5, 'Missing risk-return data', ha='center', va='center', transform=axes[0, 0].transAxes)
-            axes[0, 0].set_title('Risk-Return Efficiency (Missing Data)')
+    # 3. Sharpe Ratio distribution
+    print("  📊 Creating Sharpe Ratio distribution...")
+    ax = axes[0, 2]
+    sns.histplot(results_df["sharpe_ratio"], bins=15, kde=True, color="teal", ax=ax)
+    ax.set_title("Sharpe Ratio Distribution", fontsize=14)
+    ax.set_xlabel("Sharpe Ratio", fontsize=12)
+    ax.set_ylabel("Frequency", fontsize=12)
+    ax.grid(True, alpha=0.3)
 
-        # 2. Drawdown Analysis (Top Center)
-        print("  📉 Creating Drawdown analysis...")
-        if all(col in results_df.columns for col in ['max_drawdown', 'cagr']):
-            # Simple color coding based on drawdown
-            colors = ['green' if dd > -0.1 else 'orange' if dd > -0.2 else 'red'
-                      for dd in results_df['max_drawdown']]
+    # 4. Top performers ranking
+    print("  🏆 Creating top performers ranking...")
+    ax = axes[1, 0]
+    top10 = results_df.nlargest(10, "Final_Score")
+    bars = ax.barh(top10["portfolio"], top10["Final_Score"], color="skyblue", edgecolor="black")
+    ax.set_title("Top 10 Portfolios", fontsize=14)
+    ax.set_xlabel("Final Score", fontsize=12)
+    ax.grid(True, alpha=0.3)
+    for bar in bars:
+        width = bar.get_width()
+        ax.text(width + 0.01, bar.get_y() + bar.get_height() / 2,
+                f"{width:.2f}", va="center", fontsize=8)
 
-            axes[0, 1].scatter(
-                results_df['max_drawdown'],
-                results_df['cagr'],
-                c=colors,
-                alpha=0.8,
-                s=80,
-                edgecolors='black',
-                linewidth=0.5
-            )
-            axes[0, 1].set_xlabel('Max Drawdown', fontsize=12)
-            axes[0, 1].set_ylabel('CAGR', fontsize=12)
-            axes[0, 1].set_title('Drawdown vs Return Analysis\n(Color = Risk Level)', fontsize=14)
-            axes[0, 1].grid(True, alpha=0.3)
-        else:
-            axes[0, 1].text(0.5, 0.5, 'Missing drawdown data', ha='center', va='center', transform=axes[0, 1].transAxes)
-            axes[0, 1].set_title('Drawdown Analysis (Missing Data)')
+    # 5. Trading quality analysis
+    print("  🎯 Creating trading quality analysis...")
+    ax = axes[1, 1]
+    scatter_q = ax.scatter(
+        results_df["win_rate"],
+        results_df["profit_factor"],
+        c=results_df["win_rate"],
+        cmap="RdYlGn",
+        s=80,
+        alpha=0.8,
+        edgecolors="black",
+        linewidth=0.5
+    )
+    ax.set_title("Trading Quality\n(Win Rate vs Profit Factor)", fontsize=14)
+    ax.set_xlabel("Win Rate", fontsize=12)
+    ax.set_ylabel("Profit Factor", fontsize=12)
+    ax.grid(True, alpha=0.3)
+    ax.axhline(y=1.0, color="red", linestyle="--", alpha=0.7, label="Break-even")
+    ax.axvline(x=0.5, color="gray", linestyle="--", alpha=0.7, label="50% Win Rate")
+    ax.legend()
 
-        # 3. Sharpe Distribution (Top Right)
-        print("  📊 Creating Sharpe Ratio distribution...")
-        if 'sharpe_ratio' in results_df.columns:
-            clean_sharpe = results_df['sharpe_ratio'].dropna()
-            if not clean_sharpe.empty:
-                axes[0, 2].hist(clean_sharpe, bins=15, alpha=0.8, color='skyblue', edgecolor='black')
-                axes[0, 2].axvline(clean_sharpe.median(), color='red', linestyle='--',
-                                   label=f'Median: {clean_sharpe.median():.2f}')
-                axes[0, 2].set_xlabel('Sharpe Ratio')
-                axes[0, 2].set_ylabel('Frequency')
-                axes[0, 2].set_title('Sharpe Ratio Distribution')
-                axes[0, 2].grid(True, alpha=0.3)
-                axes[0, 2].legend()
-            else:
-                axes[0, 2].text(0.5, 0.5, 'No valid Sharpe data', ha='center', va='center', transform=axes[0, 2].transAxes)
-        else:
-            axes[0, 2].text(0.5, 0.5, 'sharpe_ratio column not found', ha='center', va='center', transform=axes[0, 2].transAxes)
+    # 6. Performance distribution
+    print("  📈 Creating performance distribution...")
+    ax = axes[1, 2]
+    sns.histplot(results_df["Final_Score"], bins=15, color="lightgreen", edgecolor="black", ax=ax)
+    median = results_df["Final_Score"].median()
+    ax.axvline(median, color="red", linestyle="--", label=f"Median: {median:.2f}")
+    ax.set_title("Performance Score Distribution", fontsize=14)
+    ax.set_xlabel("Final Score", fontsize=12)
+    ax.set_ylabel("Frequency", fontsize=12)
+    ax.grid(True, alpha=0.3)
+    ax.legend()
 
-        # 4. Top Performers (Bottom Left)
-        print("  🏆 Creating top performers ranking...")
-        if 'Final_Score' in results_df.columns and 'portfolio' in results_df.columns:
-            top_10 = results_df.nlargest(10, 'Final_Score')
-            if not top_10.empty:
-                y_pos = range(len(top_10))
-                bars = axes[1, 0].barh(y_pos, top_10['Final_Score'], color='lightgreen', edgecolor='black')
-                axes[1, 0].set_yticks(y_pos)
-                clean_names = [name.replace('Portfolio ', 'P') for name in top_10['portfolio']]
-                axes[1, 0].set_yticklabels(clean_names, fontsize=8)
-                axes[1, 0].set_xlabel('Final Score')
-                axes[1, 0].set_title('Top 10 Portfolios')
-                axes[1, 0].grid(True, alpha=0.3)
+    # finalize
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    print("✅ Dashboard creation completed!")
+    print(f"   📁 Saved to: {save_path}")
+    fig.savefig(save_path, dpi=DPI)
+    plt.close(fig)
 
-                # Add values on bars
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    axes[1, 0].text(width + 0.01, bar.get_y() + bar.get_height()/2,
-                                    f'{width:.2f}', ha='left', va='center', fontsize=8)
-            else:
-                axes[1, 0].text(0.5, 0.5, 'No data for top performers', ha='center', va='center', transform=axes[1, 0].transAxes)
-        else:
-            axes[1, 0].text(0.5, 0.5, 'Final_Score or Portfolio columns not found', ha='center', va='center', transform=axes[1, 0].transAxes)
-
-        # 5. Trading Quality (Bottom Center)
-        print("  🎯 Creating trading quality analysis...")
-        if all(col in results_df.columns for col in ['win_rate', 'avg_win', 'avg_loss']):
-            axes[1, 1].scatter(
-                results_df['win_rate'],
-                results_df['profit_factor'],
-                c=results_df['win_rate'],
-                s=80,
-                alpha=0.8,
-                cmap='RdYlGn',
-                edgecolors='black',
-                linewidth=0.5
-            )
-            axes[1, 1].set_xlabel('Win Rate')
-            axes[1, 1].set_ylabel('Profit Factor')
-            axes[1, 1].set_title('Trading Quality\n(Win Rate vs Profit Factor)')
-            axes[1, 1].grid(True, alpha=0.3)
-
-            # Add reference lines
-            axes[1, 1].axhline(y=1.0, color='red', linestyle='--', alpha=0.7, label='Break-even')
-            axes[1, 1].axvline(x=0.5, color='gray', linestyle='--', alpha=0.7, label='50% Win Rate')
-            axes[1, 1].legend()
-        else:
-            axes[1, 1].text(0.5, 0.5, 'Missing trading data', ha='center', va='center', transform=axes[1, 1].transAxes)
-
-        # 6. Performance Distribution (Bottom Right)
-        print("  📈 Creating performance distribution...")
-        if 'Final_Score' in results_df.columns:
-            clean_scores = results_df['Final_Score'].dropna()
-            if not clean_scores.empty:
-                axes[1, 2].hist(clean_scores, bins=15, alpha=0.8, color='lightcoral', edgecolor='black')
-                axes[1, 2].axvline(clean_scores.median(), color='red', linestyle='--',
-                                   label=f'Median: {clean_scores.median():.3f}')
-                axes[1, 2].set_xlabel('Final Score')
-                axes[1, 2].set_ylabel('Frequency')
-                axes[1, 2].set_title('Performance Score\nDistribution')
-                axes[1, 2].grid(True, alpha=0.3)
-                axes[1, 2].legend()
-            else:
-                axes[1, 2].text(0.5, 0.5, 'No valid score data', ha='center', va='center', transform=axes[1, 2].transAxes)
-        else:
-            axes[1, 2].text(0.5, 0.5, 'No performance data available', ha='center', va='center', transform=axes[1, 2].transAxes)
-
-        # Adjust layout
-        plt.tight_layout(rect=[0, 0, 1, 0.95])
-
-        # Save dashboard
-        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
-
-        print(f"\n✅ Dashboard creation completed!")
-        print(f"   📁 Saved to: {save_path}")
-
-        # Show dashboard
-        plt.show()
-
-        return True
-
-    except Exception as e:
-        print(f"❌ Critical error creating dashboard: {str(e)}")
-        return False
-
-    finally:
-        plt.close('all')
-
-if __name__ == "__main__":
-    print("📊 Portfolio Visualization Module - Simplified Version")
