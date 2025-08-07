@@ -7,62 +7,43 @@ Implements institutional-grade financial metrics with academic standards.
 Enhanced with advanced stability, tail risk, and regime analysis metrics.
 """
 from typing import Tuple, Optional, Dict
-from datetime import datetime
+
 import numpy as np
 import pandas as pd
 
 from custom_config import TRADING_DAYS_PER_YEAR, INITIAL_CAPITAL, ANNUAL_RISK_FREE_RATE
 
 SQRT_TRADING_DAYS_PER_YEAR = np.sqrt(252)
+DAILY_RISK_FREE_RATE = (1 + ANNUAL_RISK_FREE_RATE)**(1 / TRADING_DAYS_PER_YEAR) - 1
 
-def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate=ANNUAL_RISK_FREE_RATE) -> float:
+def calculate_sharpe_ratio(returns: pd.Series, volatility: float) -> float:
     """
     Calculate Sharpe Ratio
     
     Args:
-        returns: Series of portfolio returns
-        risk_free_rate: Annual risk-free rate (default 2%)
+        returns: Series of portfolio daily returns
+        volatility: Annualized volatility 
         
     Returns:
         Sharpe ratio
     """
-    try:
-        returns_std = returns.std()
-        if returns_std == 0 or pd.isna(returns_std):
-            return 0.0
-
-        daily_risk_free_rate = risk_free_rate / TRADING_DAYS_PER_YEAR
-
-        # Calculate daily excess returns
-        excess_returns = returns - daily_risk_free_rate
-
-        # Calculate annualized metrics
-        annualized_excess_return = excess_returns.mean() * TRADING_DAYS_PER_YEAR
-        annualized_volatility = returns.std() * SQRT_TRADING_DAYS_PER_YEAR
-
-        if annualized_volatility == 0 or pd.isna(annualized_volatility):
-            return 0.0
-
-        return annualized_excess_return / annualized_volatility
+    excess_returns = returns - DAILY_RISK_FREE_RATE
+    annualized_mean_return = excess_returns.mean() * TRADING_DAYS_PER_YEAR
     
-    except Exception:
-        return 0.0
+    return annualized_mean_return / volatility
 
-def calculate_sortino_ratio(returns: pd.Series, risk_free_rate=ANNUAL_RISK_FREE_RATE) -> float:
+def calculate_sortino_ratio(returns: pd.Series) -> float:
     """
     Calculate Sortino Ratio (focuses on downside deviation)
     
     Args:
-        returns: Series of portfolio returns
-        risk_free_rate: Annual risk-free rate
+        returns: Series of portfolio daily returns
         
     Returns:
         Sortino ratio
     """
     try:
-        daily_risk_free_rate = risk_free_rate / TRADING_DAYS_PER_YEAR
-
-        excess_returns = returns - daily_risk_free_rate
+        excess_returns = returns - DAILY_RISK_FREE_RATE
         downside_returns = excess_returns[excess_returns < 0]
 
         if len(downside_returns) == 0:
@@ -77,27 +58,19 @@ def calculate_sortino_ratio(returns: pd.Series, risk_free_rate=ANNUAL_RISK_FREE_
     except Exception:
         return 0.0
 
-def calculate_calmar_ratio(returns: pd.Series) -> float:
+def calculate_calmar_ratio(cagr: float, max_drawdown: float, risk_free_rate=ANNUAL_RISK_FREE_RATE) -> float:
     """
     Calculate Calmar Ratio (Annual Return / Maximum Drawdown)
     
     Args:
-        returns: Series of portfolio returns
+        cagr: Compound Annual Growth Rate
+        max_drawdown: Max drawdown percent
+        risk_free_rate: Annual risk-free rate
         
     Returns:
         Calmar ratio
     """
-    try:
-        total_return = (1 + returns).prod() - 1
-        max_dd = calculate_max_drawdown(returns)
-
-        if max_dd == 0:
-            return 0.0
-
-        return total_return / max_dd
-    
-    except Exception:
-        return 0.0
+    return (cagr - risk_free_rate) / max_drawdown
 
 def calculate_cagr(pnl_series: pd.Series, total_years_of_trading: float, initial_capital=INITIAL_CAPITAL) -> float:
     """
@@ -107,7 +80,7 @@ def calculate_cagr(pnl_series: pd.Series, total_years_of_trading: float, initial
     
     Args:
         pnl_series: Series of portfolio PnL
-        initial_capital: Base capital (default: 1000)
+        initial_capital: Base capital 
         total_years_of_trading: Total trading history in years
         
     Returns:
@@ -129,7 +102,7 @@ def calculate_max_drawdown(returns: pd.Series) -> float:
     Calculate Maximum Drawdown
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         
     Returns:
         Maximum drawdown as a positive value
@@ -155,7 +128,7 @@ def calculate_var_cvar(returns: pd.Series, percentile: float = 0.05) -> Tuple[fl
     Calculate Value at Risk and Conditional Value at Risk
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         percentile: Confidence level (default from config)
         
     Returns:
@@ -179,7 +152,7 @@ def calculate_omega_ratio(returns: pd.Series, threshold: float = 0.0) -> float:
     Calculate Omega Ratio
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         threshold: Return threshold (default 0%)
         
     Returns:
@@ -207,7 +180,7 @@ def calculate_sharpe_stability(returns: pd.Series, window: int = 63) -> float:
     Measures consistency of risk-adjusted returns over time
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         window: Rolling window size (default 63 = ~3 months)
         
     Returns:
@@ -243,7 +216,7 @@ def calculate_return_stability(returns: pd.Series) -> float:
     Calculate Return Stability (inverse of coefficient of variation)
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         
     Returns:
         Stability score (0-1, higher is better)
@@ -264,7 +237,7 @@ def calculate_recovery_consistency(returns: pd.Series, drawdown_threshold: float
     Measures how consistently the portfolio recovers from drawdowns
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         drawdown_threshold: Minimum drawdown to consider (default 1%)
         
     Returns:
@@ -318,7 +291,7 @@ def calculate_tail_ratio(returns: pd.Series, percentile: float = 0.05) -> float:
     Measures asymmetry in extreme returns
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         percentile: Percentile for tail definition (default 5%)
         
     Returns:
@@ -341,7 +314,7 @@ def calculate_max_loss_streak(returns: pd.Series) -> int:
     Calculate Maximum Consecutive Loss Streak
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         
     Returns:
         Maximum number of consecutive losing periods
@@ -367,7 +340,7 @@ def calculate_multi_level_cvar(returns: pd.Series) -> dict:
     Calculate CVaR at multiple confidence levels
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
         
     Returns:
         Dictionary with CVaR at different confidence levels
@@ -390,13 +363,14 @@ def calculate_multi_level_cvar(returns: pd.Series) -> dict:
 # REGIME ANALYSIS METRICS
 # ============================================================================
 
-def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.00) -> float:
+def calculate_regime_consistency(returns: pd.Series, volatility: float, vol_threshold=0.00) -> float:
     """
     Calculate Performance Consistency Across Volatility Regimes
     Measures how consistently the strategy performs in different market conditions
     
     Args:
-        returns: Series of portfolio returns
+        returns: Series of portfolio daily returns
+        volatility: Annualized volatility 
         vol_threshold: Volatility threshold for regime definition
         
     Returns:
@@ -421,10 +395,10 @@ def calculate_regime_consistency(returns: pd.Series, vol_threshold: float = 0.00
         if len(high_vol_returns) < 21 or len(low_vol_returns) < 21:
             return 0.0
 
-        high_vol_sharpe = calculate_sharpe_ratio(high_vol_returns)
-        low_vol_sharpe = calculate_sharpe_ratio(low_vol_returns)
+        high_vol_sharpe = calculate_sharpe_ratio(high_vol_returns, volatility)
+        low_vol_sharpe = calculate_sharpe_ratio(low_vol_returns, volatility)
 
-        # Consistency is based on similarity of Sharpe ratios
+        # Consistency is based on the similarity of Sharpe ratios
         if high_vol_sharpe == 0 and low_vol_sharpe == 0:
             return 0.0
 
@@ -454,12 +428,7 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
     Returns:
         Dictionary of calculated metrics or None if failed
     """
-    try:      
-        # Calculate total trading history in years
-        start_date = portfolio_data['Open time'].min()
-        end_date = portfolio_data['Close time'].max()
-        total_years_of_trading = (end_date - start_date).days / 365
-        
+    try:            
         # Convert P&L to returns
         pnl_series = pd.to_numeric(portfolio_data['Profit/Loss'], errors='coerce').dropna()
 
@@ -468,39 +437,48 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
             return None
 
         # Calculate returns
-        returns = convert_pnl_to_returns(pnl_series)
-        if len(returns) == 0:
+        daily_pct_returns = convert_pnl_to_returns(portfolio_data)['dailyPctReturns']
+        if len(daily_pct_returns) == 0:
             print(f"   ❌ {portfolio_name}: Failed to convert PnL to returns")
             return {}
-
-        var_95, cvar_95 = calculate_var_cvar(returns)
-
+        
+        # Calculate total trading history in years
+        start_date = portfolio_data['Open time'].min()
+        end_date = portfolio_data['Close time'].max()
+        total_years_of_trading = (end_date - start_date).days / 365
+        
+        # Calculate key metrics 
+        cagr = calculate_cagr(pnl_series, total_years_of_trading)
+        volatility = (daily_pct_returns - DAILY_RISK_FREE_RATE).std() * SQRT_TRADING_DAYS_PER_YEAR
+        max_drawdown = calculate_max_drawdown(daily_pct_returns)
+        var_95, cvar_95 = calculate_var_cvar(daily_pct_returns)
+        
         metrics = {
             # Portfolio name
             'portfolio': portfolio_name,
             
             # Basic metrics
-            'cagr': calculate_cagr(pnl_series, total_years_of_trading),
-            'volatility': returns.std() * SQRT_TRADING_DAYS_PER_YEAR,
-            'sharpe_ratio': calculate_sharpe_ratio(returns),
-            'sortino_ratio': calculate_sortino_ratio(returns),
-            'calmar_ratio': calculate_calmar_ratio(returns),
-            'max_drawdown': calculate_max_drawdown(returns),
+            'cagr': cagr,
+            'volatility': volatility,
+            'sharpe_ratio': calculate_sharpe_ratio(daily_pct_returns, volatility),
+            'sortino_ratio': calculate_sortino_ratio(daily_pct_returns),
+            'calmar_ratio': calculate_calmar_ratio(cagr, max_drawdown),
+            'max_drawdown': max_drawdown,
             'var_95': var_95,
             'cvar_95': cvar_95,
-            'omega_ratio': calculate_omega_ratio(returns),
+            'omega_ratio': calculate_omega_ratio(daily_pct_returns),
 
             # Stability metrics
-            'sharpe_stability': calculate_sharpe_stability(returns),
-            'return_stability': calculate_return_stability(returns),
-            'recovery_consistency': calculate_recovery_consistency(returns),
+            'sharpe_stability': calculate_sharpe_stability(daily_pct_returns),
+            'return_stability': calculate_return_stability(daily_pct_returns),
+            'recovery_consistency': calculate_recovery_consistency(daily_pct_returns),
             
             # Tail risk metrics
-            'tail_ratio': calculate_tail_ratio(returns),
-            'max_loss_streak': calculate_max_loss_streak(returns),
+            'tail_ratio': calculate_tail_ratio(daily_pct_returns),
+            'max_loss_streak': calculate_max_loss_streak(daily_pct_returns),
             
             # Regime metrics
-            'regime_consistency': calculate_regime_consistency(returns),
+            'regime_consistency': calculate_regime_consistency(daily_pct_returns, volatility),
             
             # Portfolio metadata
             'trade_count': len(pnl_series),
@@ -511,7 +489,7 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
         }
 
         # Add multi-level CVaR
-        cvar_metrics = calculate_multi_level_cvar(returns)
+        cvar_metrics = calculate_multi_level_cvar(daily_pct_returns)
         metrics.update(cvar_metrics)
 
         return metrics
@@ -520,28 +498,35 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
         print(f"   ❌ {portfolio_name}: Analysis failed - {str(e)}")
         return None
 
-def convert_pnl_to_returns(pnl_series: pd.Series, initial_capital=INITIAL_CAPITAL):
+def convert_pnl_to_returns(portfolio_data: pd.DataFrame, initial_capital=INITIAL_CAPITAL) -> pd.DataFrame:
     """
-    Convert PnL to returns using a fixed capital base
+    Convert PnL to returns using balance-based method:
+    - Groups PnL by day
+    - Calculates cumulative equity from initial capital (initial_capital + PnL)
+    - Returns the percentage change on the balance (dailyPctReturns)
     
     Args:
-        pnl_series: series of PnL values
-        initial_capital: base capital for conversion (default: 1000)
+        portfolio_data: Portfolio trading data
+        initial_capital: base capital for conversion 
     
     Returns:
         pd.Series: normalized returns
     """
     try:
-        if len(pnl_series) == 0:
-            return pd.Series([], dtype=float)
+        # Group PnL by day (sum PnL of all trades closed in the same day)
+        daily_percent_returns = (portfolio_data.groupby(portfolio_data['Close time'].dt.date)['Profit/Loss']
+                                 .sum()
+                                 .reset_index()
+                                 .rename(columns={'Close time': 'Date'}))
 
-        # Convert PnL to returns using base capital
-        returns = pnl_series / initial_capital
+        # Calculate Equity (initial capital + accumulated PnL)
+        daily_percent_returns['Equity'] = initial_capital + daily_percent_returns['Profit/Loss'].cumsum()
 
-        # Remove infinite values and NaN
-        returns = returns.replace([np.inf, -np.inf], np.nan).dropna()
-        return returns
-
+        # Calculate daily percentage change (returns)
+        daily_percent_returns['dailyPctReturns'] = daily_percent_returns['Equity'].pct_change().dropna()
+        
+        return daily_percent_returns
+    
     except Exception as e:
         print(f"⚠️ Conversion error: {e}")
-        return pd.Series([], dtype=float)
+        return pd.DataFrame()

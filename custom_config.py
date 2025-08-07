@@ -10,9 +10,9 @@ import os
 # Analysis Parameters
 MIN_TRADES_THRESHOLD = 30
 SCORING_METHOD = 'topsis'
-INITIAL_CAPITAL = 1000
+INITIAL_CAPITAL = 10000
 TRADING_DAYS_PER_YEAR = 252
-ANNUAL_RISK_FREE_RATE = 0.01
+ANNUAL_RISK_FREE_RATE = 0.05
 
 # Scoring Weights (Academic/Institutional Standards)
 SCORING_WEIGHTS = {
