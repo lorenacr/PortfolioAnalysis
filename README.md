@@ -5,7 +5,7 @@ A comprehensive Python framework for analyzing trading portfolios focusing on te
 ---
 
 ## :arrow_forward: Quick Start
-1. **Put PDF files in a folder**
+1. **Put CSV files in a folder**
 Choose a folder to put csv files in (ex: './portfolios/')
 
 2. **Adjust configurations**  
