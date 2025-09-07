@@ -72,7 +72,7 @@ class PortfolioAnalyzer:
         """
         try:
             if SCORING_METHOD == 'topsis':
-                scores = self._calculate_topsis_scores(df, SCORING_WEIGHTS, BENEFIT_CRITERIA)
+                scores = self._calculate_topsis_scores(df, SCORING_WEIGHTS)
             else:
                 scores = self._calculate_weighted_scores(df, SCORING_WEIGHTS, COST_CRITERIA)
 
@@ -96,78 +96,72 @@ class PortfolioAnalyzer:
             return df
 
     @staticmethod
-    def _calculate_topsis_scores(df: pd.DataFrame, weights: Dict[str, float],
-                                 benefit_criteria: List[str]) -> pd.Series:
+    def _calculate_topsis_scores(df: pd.DataFrame, weights: Dict[str, float]) -> pd.Series:
         """
-        Calculate TOPSIS scores for portfolio ranking
+        Compute TOPSIS scores with:
+            - Z-score normalization per metric.
+            - Cost metrics inverted so all are higher-is-better.
+            - Weights applied after normalization.
+            - Euclidean distance to ideal and anti-ideal.
         
         Args:
             df: Normalized metrics dataframe
             weights: Metric weights dictionary
-            benefit_criteria: List of benefit criteria (higher is better)
-            
+        
         Returns:
-            Series of TOPSIS scores
+             Series of TOPSIS scores
         """
-        try:
-            # Get available metrics
-            available_metrics = [col for col in weights.keys() if col in df.columns]
-
-            if not available_metrics:
-                print("   ⚠️  No metrics available for TOPSIS calculation")
-                return pd.Series([0.5] * len(df))
-
-            # Create decision matrix
-            decision_matrix = df[available_metrics].fillna(0.5)
-
-            # Apply weights
-            weight_vector = np.array([weights[col] for col in available_metrics])
-            weighted_matrix = decision_matrix * weight_vector
-
-            # Calculate ideal and negative ideal solutions
-            ideal_solution = []
-            negative_ideal_solution = []
-
-            for col in available_metrics:
-                if col in benefit_criteria:
-                    ideal_solution.append(weighted_matrix[col].max())
-                    negative_ideal_solution.append(weighted_matrix[col].min())
-                else:  # cost criteria
-                    ideal_solution.append(weighted_matrix[col].min())
-                    negative_ideal_solution.append(weighted_matrix[col].max())
-
-            ideal_solution = np.array(ideal_solution)
-            negative_ideal_solution = np.array(negative_ideal_solution)
-
-            # Calculate distances to ideal and negative ideal solutions
-            distances_to_ideal = []
-            distances_to_negative_ideal = []
-
-            for idx in range(len(df)):
-                alternative = weighted_matrix.iloc[idx].values
-
-                # Euclidean distance to ideal solution
-                dist_ideal = np.sqrt(np.sum((alternative - ideal_solution) ** 2))
-                distances_to_ideal.append(dist_ideal)
-
-                # Euclidean distance to negative ideal solution
-                dist_negative = np.sqrt(np.sum((alternative - negative_ideal_solution) ** 2))
-                distances_to_negative_ideal.append(dist_negative)
-
-            # Calculate TOPSIS scores
-            distances_to_ideal = np.array(distances_to_ideal)
-            distances_to_negative_ideal = np.array(distances_to_negative_ideal)
-
-            # Avoid division by zero
-            total_distances = distances_to_ideal + distances_to_negative_ideal
-            scores = np.where(total_distances > 0,
-                              distances_to_negative_ideal / total_distances,
-                              0.5)
-
-            return pd.Series(scores)
-
+        try:            
+            # Select metrics present in both df and weights
+            metric_cols = [m for m in weights.keys() if m in df.columns]
+            
+            # Build numeric decision matrix
+            decision = df[metric_cols].copy()
+            for col in metric_cols:
+                decision[col] = pd.to_numeric(decision[col], errors="coerce")
+            
+            # Helper: z-score a single column with safe handling for zero std
+            def zscore_safe(series: pd.Series) -> pd.Series:
+                series = pd.to_numeric(series, errors="coerce")
+                mean_val = series.mean()
+                std_val = series.std(ddof=0)
+                if std_val == 0 or pd.isna(std_val):
+                    return pd.Series(np.zeros(len(series)), index=series.index)
+                return (series - mean_val) / std_val
+            
+            # Normalize each metric; invert costs so higher is better
+            normalized = pd.DataFrame(index=decision.index)
+            for col in metric_cols:
+                z = zscore_safe(decision[col])
+                if col in COST_CRITERIA:
+                    z = -z
+                normalized[col] = z.fillna(0)
+            
+            # Apply weights after normalization
+            weighted = normalized.copy()
+            for col in metric_cols:
+                weighted[col] = weighted[col] * float(weights[col])
+            
+            # Ideal (best) and anti-ideal (worst) vectors
+            ideal = weighted.max(axis=0).values
+            anti_ideal = weighted.min(axis=0).values
+            
+            # Euclidean distances to ideal and anti-ideal
+            values = weighted.values
+            distance_to_ideal = np.sqrt(((values - ideal) ** 2).sum(axis=1))
+            distance_to_anti = np.sqrt(((values - anti_ideal) ** 2).sum(axis=1))
+            
+            # TOPSIS score: higher is better
+            denom = distance_to_ideal + distance_to_anti
+            with np.errstate(divide="ignore", invalid="ignore"):
+                scores = np.where(denom > 0, distance_to_anti / denom, 0.0)
+            
+            result = pd.Series(scores, index=df.index, name="Final_Score")
+            print("Calculated TOPSIS scores for " + str(len(result)) + " rows")
+            return result
+            
         except Exception as e:
-            print(f"   ❌ TOPSIS calculation failed: {str(e)}")
+            print(f"   ❌ TOPSIS scoring failed: {str(e)}")
             return pd.Series([0.5] * len(df))
 
     @staticmethod
