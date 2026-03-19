@@ -11,7 +11,16 @@ from typing import Tuple, Optional, Dict
 import numpy as np
 import pandas as pd
 
-from custom_config import TRADING_DAYS_PER_YEAR, INITIAL_CAPITAL, ANNUAL_RISK_FREE_RATE
+from custom_config import (
+    TRADING_DAYS_PER_YEAR,
+    INITIAL_CAPITAL,
+    ANNUAL_RISK_FREE_RATE,
+    MC_NUM_SIMULATIONS,
+    MC_CONFIDENCE_LEVEL,
+    MC_RANDOM_SEED,
+    MC_BATCH_SIZE,
+)
+from monte_carlo import calculate_trade_reordering_drawdown_metrics
 
 SQRT_TRADING_DAYS_PER_YEAR = np.sqrt(252)
 DAILY_RISK_FREE_RATE = (1 + ANNUAL_RISK_FREE_RATE)**(1 / TRADING_DAYS_PER_YEAR) - 1
@@ -452,6 +461,16 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
         volatility = (daily_pct_returns - DAILY_RISK_FREE_RATE).std() * SQRT_TRADING_DAYS_PER_YEAR
         max_drawdown = calculate_max_drawdown(daily_pct_returns)
         var_95, cvar_95 = calculate_var_cvar(daily_pct_returns)
+
+        # Monte Carlo: trade reordering drawdown distribution
+        mc_drawdown_metrics = calculate_trade_reordering_drawdown_metrics(
+            trade_pnl=pnl_series.values,
+            n_sims=MC_NUM_SIMULATIONS,
+            confidence=MC_CONFIDENCE_LEVEL,
+            initial_capital=INITIAL_CAPITAL,
+            seed=MC_RANDOM_SEED,
+            batch_size=MC_BATCH_SIZE,
+        )
         
         metrics = {
             # Portfolio name
@@ -464,6 +483,7 @@ def calculate_portfolio_metrics(portfolio_data: pd.DataFrame,
             'sortino_ratio': calculate_sortino_ratio(daily_pct_returns),
             'calmar_ratio': calculate_calmar_ratio(cagr, max_drawdown),
             'max_drawdown': max_drawdown,
+            'mc_max_dd_p95': mc_drawdown_metrics.get('mc_max_dd_p95', 0.0),
             'var_95': var_95,
             'cvar_95': cvar_95,
             'omega_ratio': calculate_omega_ratio(daily_pct_returns),

@@ -106,7 +106,7 @@ def load_portfolios_from_folder(folder_path: str = './') -> Dict[str, pd.DataFra
     print(f"📁 Loading portfolios from: {folder_path}")
     
     # Find all CSV files that look like portfolios
-    csv_files = glob.glob(os.path.join(folder_path, "Portfolio*.csv"))
+    csv_files = glob.glob(os.path.join(folder_path, "*.csv"))
     
     if not csv_files:
         print("⚠️  No Portfolio CSV files found in the specified folder")

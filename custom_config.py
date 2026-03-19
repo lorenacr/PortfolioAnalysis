@@ -14,10 +14,18 @@ INITIAL_CAPITAL = 10000
 TRADING_DAYS_PER_YEAR = 252
 ANNUAL_RISK_FREE_RATE = 0.05
 
+# Monte Carlo Parameters (Trade Reordering)
+MC_NUM_SIMULATIONS = 5000
+MC_CONFIDENCE_LEVEL = 0.95
+MC_RANDOM_SEED = 42
+MC_BATCH_SIZE = 256
+# Threads used to split MC simulations within each portfolio
+MC_PARALLEL_WORKERS = 8
+
 # Scoring Weights (Academic/Institutional Standards)
 SCORING_WEIGHTS = {
     'sharpe_ratio': 0.12, 'sortino_ratio': 0.05, 'calmar_ratio': 0.07,
-    'omega_ratio': 0.01, 'cagr': 0.03, 'max_drawdown': 0.10,
+    'omega_ratio': 0.01, 'cagr': 0.03, 'mc_max_dd_p95': 0.10,
     'volatility': 0.04, 'var_95': 0.04, 'cvar_95': 0.08,
     'sharpe_stability': 0.10, 'return_stability': 0.10,
     'recovery_consistency': 0.06, 'regime_consistency': 0.06,
@@ -32,7 +40,7 @@ BENEFIT_CRITERIA = [
 ]
 
 COST_CRITERIA = [
-    'max_drawdown', 'volatility', 'var_95', 'cvar_95', 'cvar_99',
+    'mc_max_dd_p95', 'volatility', 'var_95', 'cvar_95', 'cvar_99',
     'max_loss_streak'
 ]
 

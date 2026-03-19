@@ -229,7 +229,7 @@ class PortfolioAnalyzer:
                 print("❌ No portfolios could be analyzed")
                 return False
 
-            # Step 2: Calculate metrics for all portfolios            
+            # Step 2: Calculate metrics for all portfolios (sequential; MC parallelizes internally)
             results = []
 
             for portfolio_name, portfolio_data in tqdm(
