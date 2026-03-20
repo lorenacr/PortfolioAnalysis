@@ -18,6 +18,12 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
     """
     Create a comprehensive performance dashboard.
 
+    No console spam per subplot; callers (e.g. ``portfolio_analyzer``) own user-facing logs.
+
+    Layout: 2 panels on row 1 (Risk–Return + MC drawdown), 2 on row 2 (Sharpe + Trading
+    quality), 1 full-width on row 3 (Final score distribution). This avoids crowding
+    the colorbar against adjacent plots.
+
     Saves the figure to disk and opens an interactive window via
     ``matplotlib.pyplot.show()`` (GUI backend required; close the window to unblock).
 
@@ -28,8 +34,6 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
     Returns:
         bool: Success status
     """
-
-    # Readable fonts when the figure is scaled to fit the display window
     rc_vis = {
         "font.size": 11,
         "axes.titlesize": 13,
@@ -40,8 +44,14 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
     }
 
     with plt.rc_context(rc_vis):
-        # 1. Risk-Return scatter
-        fig, axes = plt.subplots(2, 3, figsize=FIGURE_SIZE)
+        fig = plt.figure(figsize=FIGURE_SIZE)
+        # 3 rows × 2 cols: (2+2) + (1 full width)
+        gs = fig.add_gridspec(
+            3, 2,
+            hspace=0.40,
+            wspace=0.30,
+            height_ratios=[1.0, 1.0, 0.95],
+        )
         fig.suptitle(
             "Portfolio Performance Dashboard — Comprehensive Analysis",
             fontsize=16,
@@ -49,7 +59,10 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
             fontweight="bold",
         )
 
-        ax = axes[0, 0]
+        # Row 0, left: Risk-Return + dedicated colorbar column (no neighbor overlap)
+        gs_rr = gs[0, 0].subgridspec(1, 2, width_ratios=[1, 0.10], wspace=0.18)
+        ax = fig.add_subplot(gs_rr[0, 0])
+        cax = fig.add_subplot(gs_rr[0, 1])
         scatter = ax.scatter(
             results_df["volatility"],
             results_df["cagr"],
@@ -58,16 +71,18 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
             s=80,
             alpha=0.8,
             edgecolors="black",
-            linewidth=0.5
+            linewidth=0.5,
         )
         ax.set_title("Risk-Return Efficiency\n(Color = Sharpe Ratio)")
         ax.set_xlabel("Volatility (Risk)")
         ax.set_ylabel("CAGR")
         ax.grid(True, alpha=0.3)
-        plt.colorbar(scatter, ax=ax).set_label("Sharpe Ratio\n(Higher = Better)")
+        cb = fig.colorbar(scatter, cax=cax)
+        cb.set_label("Sharpe ratio\n(Higher = Better)", fontsize=10)
+        cax.tick_params(labelsize=9)
 
-        # 2. Monte Carlo max drawdown at 95% confidence (trade reordering), across portfolios
-        ax = axes[0, 1]
+        # Row 0, right: Monte Carlo drawdown (full half-width, away from colorbar)
+        ax = fig.add_subplot(gs[0, 1])
         sns.histplot(
             results_df["mc_max_dd_p95"],
             bins=15,
@@ -76,35 +91,21 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
             edgecolor="black",
             ax=ax,
         )
-        ax.set_title(
-            "MC Max Drawdown (95%)\nTrade reordering — across portfolios",
-        )
+        ax.set_title("MC Max Drawdown (95%)\nTrade reordering — across portfolios")
         ax.set_xlabel("95th percentile max DD (Monte Carlo)")
         ax.set_ylabel("Frequency")
         ax.grid(True, alpha=0.3)
 
-        # 3. Sharpe Ratio distribution
-        ax = axes[0, 2]
+        # Row 1, left: Sharpe distribution
+        ax = fig.add_subplot(gs[1, 0])
         sns.histplot(results_df["sharpe_ratio"], bins=15, kde=True, color="teal", ax=ax)
         ax.set_title("Sharpe Ratio Distribution")
         ax.set_xlabel("Sharpe Ratio")
         ax.set_ylabel("Frequency")
         ax.grid(True, alpha=0.3)
 
-        # 4. Top performers ranking
-        ax = axes[1, 0]
-        top10 = results_df.nlargest(10, "Final_Score")
-        bars = ax.barh(top10["portfolio"], top10["Final_Score"], color="skyblue", edgecolor="black")
-        ax.set_title("Top 10 Portfolios")
-        ax.set_xlabel("Final Score")
-        ax.grid(True, alpha=0.3)
-        for bar in bars:
-            width = bar.get_width()
-            ax.text(width + 0.01, bar.get_y() + bar.get_height() / 2,
-                    f"{width:.2f}", va="center", fontsize=10)
-
-        # 5. Trading quality analysis
-        ax = axes[1, 1]
+        # Row 1, right: Trading quality
+        ax = fig.add_subplot(gs[1, 1])
         ax.scatter(
             results_df["win_rate"],
             results_df["profit_factor"],
@@ -113,7 +114,7 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
             s=80,
             alpha=0.8,
             edgecolors="black",
-            linewidth=0.5
+            linewidth=0.5,
         )
         ax.set_title("Trading Quality\n(Win Rate vs Profit Factor)")
         ax.set_xlabel("Win Rate")
@@ -121,10 +122,10 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
         ax.grid(True, alpha=0.3)
         ax.axhline(y=1.0, color="red", linestyle="--", alpha=0.7, label="Break-even")
         ax.axvline(x=0.5, color="gray", linestyle="--", alpha=0.7, label="50% Win Rate")
-        ax.legend()
+        ax.legend(loc="best")
 
-        # 6. Performance distribution
-        ax = axes[1, 2]
+        # Row 2: Performance distribution (spans both columns)
+        ax = fig.add_subplot(gs[2, :])
         sns.histplot(results_df["Final_Score"], bins=15, color="lightgreen", edgecolor="black", ax=ax)
         median = results_df["Final_Score"].median()
         ax.axvline(median, color="red", linestyle="--", label=f"Median: {median:.2f}")
@@ -132,10 +133,9 @@ def create_performance_dashboard(results_df, save_path=DASHBOARD_FILENAME):
         ax.set_xlabel("Final Score")
         ax.set_ylabel("Frequency")
         ax.grid(True, alpha=0.3)
-        ax.legend()
+        ax.legend(loc="best")
 
         plt.tight_layout(rect=[0, 0, 1, 0.96])
-        print(f"💾 Dashboard saved to: {save_path}")
         fig.savefig(save_path, dpi=DPI)
 
     plt.show()
