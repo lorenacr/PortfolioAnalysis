@@ -9,10 +9,15 @@ Primary use-case:
     - Estimate drawdown-at-confidence (e.g., 95th percentile of max drawdown)
       under random trade ordering.
 
+Implementation:
+    - Each simulation uses ``np.random.shuffle`` on a copy of trade PnL (Fisher–Yates,
+      O(n) per permutation), compiled via Numba for speed—replacing the previous
+      vectorized ``argsort`` approach (O(n log n) per row).
+
 Parallelism:
     - Always splits ``n_sims`` across ``MC_PARALLEL_WORKERS`` threads (from
-      ``custom_config``), capped by ``n_sims``; each worker uses an independent RNG
-      stream via ``SeedSequence``.
+      ``custom_config``), capped by ``n_sims``; each worker uses a distinct integer
+      seed derived from ``SeedSequence`` for reproducibility.
 """
 
 from __future__ import annotations
@@ -21,8 +26,65 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
 
 import numpy as np
+from numba import njit
 
 from custom_config import MC_PARALLEL_WORKERS
+
+
+@njit(cache=True)
+def _simulate_shuffle_slice_numba(
+    pnl: np.ndarray,
+    n_sims_slice: int,
+    initial_capital: float,
+    seed: int,
+) -> np.ndarray:
+    """
+    Run n_sims_slice simulations: shuffle trade PnL (O(n) per sim), equity path, max DD.
+
+    Args:
+        pnl: 1D float64 trade PnL (contiguous, no NaNs).
+        n_sims_slice: Number of simulations in this worker slice.
+        initial_capital: Starting equity.
+        seed: NumPy legacy RNG seed (unique per worker for independent streams).
+
+    Returns:
+        1D float64 array of max drawdown per simulation (same convention as before).
+    """
+    n = pnl.shape[0]
+    max_dd_out = np.empty(n_sims_slice, dtype=np.float64)
+    buf = np.empty(n, dtype=np.float64)
+    eps = 1e-15
+
+    np.random.seed(seed)
+
+    for s in range(n_sims_slice):
+        for i in range(n):
+            buf[i] = pnl[i]
+        np.random.shuffle(buf)
+
+        eq = initial_capital
+        peak = initial_capital
+        max_d = 0.0
+        for i in range(n):
+            eq = eq + buf[i]
+            if eq > peak:
+                peak = eq
+            sp = peak
+            if sp == 0.0:
+                sp = eps
+            d = (peak - eq) / sp
+            if d > max_d:
+                max_d = d
+        max_dd_out[s] = max_d
+
+    return max_dd_out
+
+
+def _worker_seed_int(base_seed: int, worker_idx: int) -> int:
+    """Derive a deterministic 32-bit seed for Numba's np.random.seed per worker."""
+    word = np.random.SeedSequence([base_seed, worker_idx]).generate_state(1, dtype=np.uint32)[0]
+    # Ensure positive int for broad NumPy/Numba compatibility
+    return int(word) & 0x7FFFFFFF
 
 
 def _split_n_sims(n_sims: int, n_workers: int) -> List[int]:
@@ -42,49 +104,6 @@ def _split_n_sims(n_sims: int, n_workers: int) -> List[int]:
     return [base + (1 if i < rem else 0) for i in range(n_workers)]
 
 
-def _simulate_max_drawdown_slice(
-    pnl: np.ndarray,
-    n_sims_slice: int,
-    rng: np.random.Generator,
-    initial_capital: float,
-    batch_size: int,
-) -> np.ndarray:
-    """
-    Run n_sims_slice independent trade-reordering simulations and return max drawdown per sim.
-
-    Args:
-        pnl: 1D float64 trade PnL (no NaNs).
-        n_sims_slice: Number of simulations in this slice.
-        rng: NumPy Generator (unique per worker thread).
-        initial_capital: Starting equity.
-        batch_size: Inner batch size for vectorized permutations.
-
-    Returns:
-        1D array of length n_sims_slice with max drawdown per simulation.
-    """
-    n_trades = int(pnl.size)
-    max_dd = np.empty(int(n_sims_slice), dtype=np.float64)
-    sims_done = 0
-
-    while sims_done < n_sims_slice:
-        b = int(min(batch_size, n_sims_slice - sims_done))
-
-        keys = rng.random((b, n_trades), dtype=np.float32)
-        perm_idx = np.argsort(keys, axis=1)
-        pnl_perm = pnl[perm_idx]
-
-        equity = float(initial_capital) + np.cumsum(pnl_perm, axis=1)
-        peaks = np.maximum.accumulate(equity, axis=1)
-
-        safe_peaks = np.where(peaks == 0.0, np.finfo(np.float64).eps, peaks)
-        dd = (safe_peaks - equity) / safe_peaks
-
-        max_dd[sims_done : sims_done + b] = dd.max(axis=1)
-        sims_done += b
-
-    return max_dd
-
-
 def calculate_trade_reordering_drawdown_metrics(
     trade_pnl: np.ndarray,
     n_sims: int = 5000,
@@ -98,13 +117,13 @@ def calculate_trade_reordering_drawdown_metrics(
 
     This simulation preserves the multiset of realized trade outcomes but
     randomizes their sequence. For each simulation:
-        - Randomly permute the trade PnL sequence (without replacement).
+        - Randomly permute the trade PnL sequence (without replacement) via shuffle.
         - Build an equity curve: initial_capital + cumulative sum of PnL.
         - Compute max drawdown as (peak - equity) / peak over the path.
 
     Simulations are always parallelized: ``n_sims`` is split across
     ``MC_PARALLEL_WORKERS`` threads (from ``custom_config``), each with a distinct
-    RNG stream derived from ``seed`` and the worker index.
+    RNG seed derived from ``seed`` and the worker index.
 
     Args:
         trade_pnl: 1D array-like of per-trade PnL values.
@@ -112,7 +131,7 @@ def calculate_trade_reordering_drawdown_metrics(
         confidence: Quantile level for tail metric (0.95 => 95th percentile).
         initial_capital: Starting equity used to compute drawdowns.
         seed: Optional RNG seed for reproducibility.
-        batch_size: Number of simulations processed per batch to control memory.
+        batch_size: Retained for API compatibility; ignored (shuffle path has no batching).
 
     Returns:
         Dictionary of Monte Carlo drawdown metrics:
@@ -120,9 +139,13 @@ def calculate_trade_reordering_drawdown_metrics(
             - mc_max_dd_mean: mean of simulated max drawdowns
             - mc_max_dd_median: median of simulated max drawdowns
     """
+    del batch_size  # API compatibility; Numba shuffle loop does not batch
+
     try:
         pnl = np.asarray(trade_pnl, dtype=np.float64).reshape(-1)
         pnl = pnl[~np.isnan(pnl)]
+        if not pnl.flags.c_contiguous:
+            pnl = np.ascontiguousarray(pnl)
 
         if n_sims <= 0 or pnl.size < 2:
             return {"mc_max_dd_p95": 0.0, "mc_max_dd_mean": 0.0, "mc_max_dd_median": 0.0}
@@ -136,10 +159,9 @@ def calculate_trade_reordering_drawdown_metrics(
         base_seed = 0 if seed is None else int(seed)
 
         def _run_slice(worker_idx: int, n_slice: int) -> np.ndarray:
-            ss = np.random.SeedSequence([base_seed, worker_idx])
-            wrng = np.random.default_rng(ss)
-            return _simulate_max_drawdown_slice(
-                pnl, n_slice, wrng, float(initial_capital), int(batch_size)
+            wseed = _worker_seed_int(base_seed, worker_idx)
+            return _simulate_shuffle_slice_numba(
+                pnl, int(n_slice), float(initial_capital), wseed
             )
 
         with ThreadPoolExecutor(max_workers=len(slice_sizes)) as executor:
@@ -148,7 +170,6 @@ def calculate_trade_reordering_drawdown_metrics(
                 for i, sz in enumerate(slice_sizes)
                 if sz > 0
             }
-            # Preserve worker order so concatenation matches a deterministic layout
             ordered: List[Optional[np.ndarray]] = [None] * len(slice_sizes)
             for fut in as_completed(futures):
                 idx = futures[fut]
