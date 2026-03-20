@@ -45,7 +45,9 @@ COST_CRITERIA = [
 ]
 
 # Visualization Settings
-FIGURE_SIZE = (24, 16)
+# Dashboard: moderate size so on-screen display and “fit to window” viewers stay legible
+# (very large figsize + screen downscaling makes text look tiny and “squeezed”).
+FIGURE_SIZE = (16, 10)
 DPI = 300
 COLOR_PALETTE = 'viridis'
 STYLE = 'seaborn-v0_8'
